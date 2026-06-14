@@ -1,0 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-jakarta: "Poppins", sans-serif;
+  --font-syne: "Poppins", sans-serif;
+  --font-mono: "Poppins", monospace;
+  
+  --color-f-bg: #f0f8ff;
+  --color-f-bg2: #e4f3fc;
+  --color-f-teal: #0bbfda;
+  --color-f-teal-dk: #0899b0;
+  --color-f-teal-lt: #e0f8fd;
+  --color-f-navy: #0f2d4a;
+  --color-f-navy-mid: #1a4060;
+  --color-f-gray: #6b8a9e;
+  --color-f-gray-lt: #b8d0de;
+
+  --animate-dashMove: dashMove 3s linear infinite;
+  --animate-pulse-f: pulse-f 2s infinite;
+  
+  @keyframes dashMove {
+    to { stroke-dashoffset: -30; }
+  }
+  @keyframes pulse-f {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(11,191,218,0.2); }
+    50% { box-shadow: 0 0 0 5px rgba(11,191,218,0.06); }
+  }
+  @keyframes donutSpin {
+    from { stroke-dashoffset: 50; }
+    to { stroke-dashoffset: 18; }
+  }
+}
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+}
+
+@layer utilities {
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+    body * {
+      visibility: hidden;
+    }
+    #invoice-content, #invoice-content * {
+      visibility: visible;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    #invoice-content {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      padding: 0 !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+    }
+    .print\:hidden {
+      display: none !important;
+    }
+  }
+}

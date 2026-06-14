@@ -1,0 +1,8 @@
+{
+  "name": "KroomBox",
+  "description": "Internal startup financial management application for tracking revenue, operational expenses, and payment verification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
