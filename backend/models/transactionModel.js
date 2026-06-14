@@ -6,7 +6,7 @@ class TransactionModel {
     const [rows] = await pool.query(
       `SELECT t.id, t.pelanggan_id, t.nama_manual, t.no_whatsapp_manual, t.nominal_transfer, t.kuantitas, t.tanggal_bayar, t.status_konfirmasi, t.status_dokumen, t.sertakan_tanda_tangan, t.tipe_transaksi, t.dikonfirmasi_oleh, t.notes, t.created_at,
               c.nama_pelanggan, c.no_whatsapp, c.paket_hosting
-       FROM pembayaran_masuk t
+       FROM transaksi t
        LEFT JOIN master_customers c ON t.pelanggan_id = c.id_pelanggan
        ORDER BY t.created_at DESC`
     );
@@ -15,14 +15,14 @@ class TransactionModel {
 
   // Find transaction by ID
   static async findById(id) {
-    const [rows] = await pool.query('SELECT * FROM pembayaran_masuk WHERE id = ?', [id]);
+    const [rows] = await pool.query('SELECT * FROM transaksi WHERE id = ?', [id]);
     return rows[0] || null;
   }
 
   // Create a new transaction record
   static async create({ pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh }) {
     const [result] = await pool.query(
-      `INSERT INTO pembayaran_masuk (pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh)
+      `INSERT INTO transaksi (pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [pelanggan_id || null, nama_manual || null, no_whatsapp_manual || null, nominal_transfer, kuantitas || 1, tanggal_bayar, status_konfirmasi, status_dokumen || 'Draft', sertakan_tanda_tangan ? 1 : 0, tipe_transaksi || 'Pemasukan', notes || '', dikonfirmasi_oleh]
     );
@@ -32,20 +32,20 @@ class TransactionModel {
   // Approve a transaction (set status_konfirmasi = 'lunas')
   static async approve(id, dikonfirmasi_oleh) {
     await pool.query(
-      'UPDATE pembayaran_masuk SET status_konfirmasi = "lunas", dikonfirmasi_oleh = ? WHERE id = ?',
+      'UPDATE transaksi SET status_konfirmasi = "lunas", dikonfirmasi_oleh = ? WHERE id = ?',
       [dikonfirmasi_oleh, id]
     );
   }
 
   // Delete transaction record
   static async delete(id) {
-    await pool.query('DELETE FROM pembayaran_masuk WHERE id = ?', [id]);
+    await pool.query('DELETE FROM transaksi WHERE id = ?', [id]);
   }
 
   // Update transaction record
   static async update(id, { pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh }) {
     await pool.query(
-      `UPDATE pembayaran_masuk 
+      `UPDATE transaksi 
        SET pelanggan_id = ?, nama_manual = ?, no_whatsapp_manual = ?, nominal_transfer = ?, kuantitas = ?, tanggal_bayar = ?, status_konfirmasi = ?, status_dokumen = ?, sertakan_tanda_tangan = ?, tipe_transaksi = ?, notes = ?, dikonfirmasi_oleh = ?
        WHERE id = ?`,
       [

@@ -87,7 +87,7 @@ export const getAiInsights = async (req, res) => {
     const model = geminiSetting.gemini_model_version || 'gemini-1.5-flash';
     const temp = geminiSetting.gemini_temperature !== undefined ? geminiSetting.gemini_temperature : 0.2;
 
-    // 2. Fetch all transactions (pembayaran_masuk) joined with customer names
+    // 2. Fetch all transactions (transaksi) joined with customer names
     const transactions = await TransactionModel.findAll();
 
     if (transactions.length === 0) {

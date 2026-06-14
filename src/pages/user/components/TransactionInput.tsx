@@ -8,8 +8,6 @@ interface FormState {
   userId: string;
   tipe: "Debit" | "Kredit";
   statusPembayaran: "Lunas" | "Pending" | "Belum Lunas" | "DP";
-  statusDokumen: "Draft" | "Diproses" | "Disetujui";
-  sertakanTandaTangan: boolean;
   jumlah: string;
   kuantitas: string;
   namaPembeli: string;
@@ -127,49 +125,7 @@ export default function TransactionInput({
               </select>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Status Dokumen</label>
-              <select
-                className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold appearance-none cursor-pointer"
-                value={form.statusDokumen}
-                onChange={(e) => {
-                  const status = e.target.value as any;
-                  setForm(f => ({ 
-                    ...f, 
-                    statusDokumen: status,
-                    sertakanTandaTangan: status === "Disetujui" ? true : f.sertakanTandaTangan
-                  }));
-                }}
-              >
-                <option value="Draft">Draft</option>
-                <option value="Diproses">Diproses</option>
-                <option value="Disetujui">Disetujui (Approved)</option>
-              </select>
-            </div>
 
-            {/* Checkbox for Sertakan Tanda Tangan */}
-            <div className="flex items-center gap-3 pt-6 pl-2 lg:col-span-1">
-              <input
-                type="checkbox"
-                id="sertakanTandaTangan"
-                className="w-5 h-5 text-blue-600 border-slate-200 rounded focus:ring-blue-500"
-                checked={form.sertakanTandaTangan}
-                disabled={form.statusDokumen === "Draft" || form.statusDokumen === "Disetujui"}
-                onChange={(e) => setForm(f => ({ ...f, sertakanTandaTangan: e.target.checked }))}
-              />
-              <div className="flex flex-col">
-                <label htmlFor="sertakanTandaTangan" className="text-xs font-bold text-slate-700 cursor-pointer">
-                  Centang Tanda Tangan
-                </label>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {form.statusDokumen === "Draft" 
-                    ? "Tanda tangan dilarang untuk Draft" 
-                    : form.statusDokumen === "Disetujui" 
-                      ? "Tanda tangan wajib untuk Disetujui" 
-                      : "Opsional jika status Diproses"}
-                </span>
-              </div>
-            </div>
 
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Jumlah Nominal (Rupiah)</label>
