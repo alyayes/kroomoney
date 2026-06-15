@@ -20,11 +20,26 @@ class TransactionModel {
   }
 
   // Create a new transaction record
-  static async create({ pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh }) {
+  static async create({ pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh, source_type, ext_transaction_id }) {
     const [result] = await pool.query(
-      `INSERT INTO transaksi (pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [pelanggan_id || null, nama_manual || null, no_whatsapp_manual || null, nominal_transfer, kuantitas || 1, tanggal_bayar, status_konfirmasi, status_dokumen || 'Draft', sertakan_tanda_tangan ? 1 : 0, tipe_transaksi || 'Pemasukan', notes || '', dikonfirmasi_oleh]
+      `INSERT INTO transaksi (pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh, source_type, ext_transaction_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        pelanggan_id || null,
+        nama_manual || null,
+        no_whatsapp_manual || null,
+        nominal_transfer,
+        kuantitas || 1,
+        tanggal_bayar,
+        status_konfirmasi,
+        status_dokumen || 'Draft',
+        sertakan_tanda_tangan ? 1 : 0,
+        tipe_transaksi || 'Pemasukan',
+        notes || '',
+        dikonfirmasi_oleh || null,
+        source_type || 'manual',
+        ext_transaction_id || null
+      ]
     );
     return result.insertId;
   }
@@ -43,10 +58,10 @@ class TransactionModel {
   }
 
   // Update transaction record
-  static async update(id, { pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh }) {
+  static async update(id, { pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh, source_type, ext_transaction_id }) {
     await pool.query(
       `UPDATE transaksi 
-       SET pelanggan_id = ?, nama_manual = ?, no_whatsapp_manual = ?, nominal_transfer = ?, kuantitas = ?, tanggal_bayar = ?, status_konfirmasi = ?, status_dokumen = ?, sertakan_tanda_tangan = ?, tipe_transaksi = ?, notes = ?, dikonfirmasi_oleh = ?
+       SET pelanggan_id = ?, nama_manual = ?, no_whatsapp_manual = ?, nominal_transfer = ?, kuantitas = ?, tanggal_bayar = ?, status_konfirmasi = ?, status_dokumen = ?, sertakan_tanda_tangan = ?, tipe_transaksi = ?, notes = ?, dikonfirmasi_oleh = ?, source_type = ?, ext_transaction_id = ?
        WHERE id = ?`,
       [
         pelanggan_id || null,
@@ -61,6 +76,8 @@ class TransactionModel {
         tipe_transaksi,
         notes || '',
         dikonfirmasi_oleh || null,
+        source_type || 'manual',
+        ext_transaction_id || null,
         id
       ]
     );

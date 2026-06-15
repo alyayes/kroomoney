@@ -7,6 +7,9 @@ import { sendEmail } from '../services/emailService.js';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import ExtTransactionModel from '../models/extTransactionModel.js';
+import { onInvoiceGenerated, onTransactionPaid } from '../services/callbackService.js';
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STORAGE_ROOT = join(__dirname, '..', 'storage');
@@ -132,6 +135,16 @@ export const generateInvoice = async (req, res) => {
     }
 
     await logAudit(req, `Menerbitkan Invoice ${nomor_invoice} dari Transaksi #${transaksiId}`);
+
+    // Check if API transaction and trigger callback
+    if (trx.source_type === 'api' && trx.ext_transaction_id) {
+      try {
+        await ExtTransactionModel.updateStatus(trx.ext_transaction_id, 'invoice_sent');
+        await onInvoiceGenerated(trx.ext_transaction_id, nomor_invoice, total, tanggalJatuhTempo);
+      } catch (cbErr) {
+        console.error('Callback trigger error on generate invoice:', cbErr.message);
+      }
+    }
 
     return res.status(201).json({
       status: 'success',
@@ -301,6 +314,25 @@ export const updateInvoiceStatus = async (req, res) => {
         }
         await logAudit(req, `Auto-generate Kwitansi ${nomor_kwitansi} dari Invoice ${inv.nomor_invoice}`);
       }
+    }
+
+    // Trigger callbacks for API transactions if paid or cancelled
+    try {
+      const trx = await TransactionModel.findById(inv.transaksi_id);
+      if (trx && trx.source_type === 'api' && trx.ext_transaction_id) {
+        if (status === 'dibayar') {
+          await ExtTransactionModel.updateStatus(trx.ext_transaction_id, 'paid');
+          const receipt = await ReceiptModel.findByInvoiceId(id);
+          if (receipt) {
+            await onTransactionPaid(trx.ext_transaction_id, receipt.nomor_kwitansi);
+          }
+        } else if (status === 'dibatalkan') {
+          await ExtTransactionModel.updateStatus(trx.ext_transaction_id, 'cancelled');
+          await onTransactionCancelled(trx.ext_transaction_id, 'Invoice cancelled by administrator');
+        }
+      }
+    } catch (cbErr) {
+      console.error('Callback trigger error on invoice status update:', cbErr.message);
     }
 
     await logAudit(req, `Update status Invoice ${inv.nomor_invoice} → ${status}`);

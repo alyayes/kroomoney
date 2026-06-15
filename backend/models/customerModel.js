@@ -14,18 +14,18 @@ class CustomerModel {
   }
 
   // Create a new customer record
-  static async create({ id_pelanggan, nama_pelanggan, no_whatsapp, paket_hosting, nominal_tagihan, tanggal_jatuh_tempo }) {
+  static async create({ id_pelanggan, nama_pelanggan, no_whatsapp, email, paket_hosting, nominal_tagihan, tanggal_jatuh_tempo }) {
     await pool.query(
-      'INSERT INTO master_customers (id_pelanggan, nama_pelanggan, no_whatsapp, paket_hosting, nominal_tagihan, tanggal_jatuh_tempo) VALUES (?, ?, ?, ?, ?, ?)',
-      [id_pelanggan, nama_pelanggan, no_whatsapp, paket_hosting, Number(nominal_tagihan), tanggal_jatuh_tempo]
+      'INSERT INTO master_customers (id_pelanggan, nama_pelanggan, no_whatsapp, email, paket_hosting, nominal_tagihan, tanggal_jatuh_tempo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id_pelanggan, nama_pelanggan, no_whatsapp, email || null, paket_hosting, Number(nominal_tagihan), tanggal_jatuh_tempo]
     );
   }
 
   // Update customer record
-  static async update(id_pelanggan, { nama_pelanggan, no_whatsapp, paket_hosting, nominal_tagihan, tanggal_jatuh_tempo }) {
+  static async update(id_pelanggan, { nama_pelanggan, no_whatsapp, email, paket_hosting, nominal_tagihan, tanggal_jatuh_tempo }) {
     await pool.query(
-      'UPDATE master_customers SET nama_pelanggan = ?, no_whatsapp = ?, paket_hosting = ?, nominal_tagihan = ?, tanggal_jatuh_tempo = ? WHERE id_pelanggan = ?',
-      [nama_pelanggan, no_whatsapp, paket_hosting, Number(nominal_tagihan), tanggal_jatuh_tempo, id_pelanggan]
+      'UPDATE master_customers SET nama_pelanggan = ?, no_whatsapp = ?, email = ?, paket_hosting = ?, nominal_tagihan = ?, tanggal_jatuh_tempo = ? WHERE id_pelanggan = ?',
+      [nama_pelanggan, no_whatsapp, email !== undefined ? email : null, paket_hosting, Number(nominal_tagihan), tanggal_jatuh_tempo, id_pelanggan]
     );
   }
 

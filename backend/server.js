@@ -13,6 +13,8 @@ import invoiceRoutes from './routes/invoices.js';
 import receiptRoutes from './routes/receipts.js';
 import reminderRoutes from './routes/reminders.js';
 import emailTemplateRoutes from './routes/emailTemplates.js';
+import apiV1Routes from './routes/api-v1.js';
+import apiClientsRoutes from './routes/apiClients.js';
 import { initializeDatabase } from './init-db.js';
 import { runReminderCycle } from './services/reminderService.js';
 
@@ -36,7 +38,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Signature']
 }));
 
 // Body parsing
@@ -59,6 +61,8 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
+app.use('/api/v1', apiV1Routes);
+app.use('/api/api-clients', apiClientsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

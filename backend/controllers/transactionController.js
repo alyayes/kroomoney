@@ -1,5 +1,7 @@
 import TransactionModel from '../models/transactionModel.js';
 import CustomerModel from '../models/customerModel.js';
+import ExtTransactionModel from '../models/extTransactionModel.js';
+import { onTransactionVerified, onTransactionCancelled } from '../services/callbackService.js';
 
 // Get all transactions
 export const getAllTransactions = async (req, res) => {
@@ -246,9 +248,7 @@ export const updateTransaction = async (req, res) => {
       message: 'Gagal memperbarui transaksi.'
     });
   }
-};
-
-// Approve transaction
+};// Approve transaction
 export const approveTransaction = async (req, res) => {
   try {
     const { id } = req.params;
@@ -268,6 +268,16 @@ export const approveTransaction = async (req, res) => {
     const identifier = existing.pelanggan_id ? `Pelanggan ${existing.pelanggan_id}` : `Transaksi Manual #${id}`;
     const activityMsg = `Menyetujui Pembayaran Masuk ID #${id} untuk ${identifier}`;
     await TransactionModel.createAuditLog(req.user.id, activityMsg, ipAddress);
+
+    // Check if API transaction and trigger callback
+    if (existing.source_type === 'api' && existing.ext_transaction_id) {
+      try {
+        await ExtTransactionModel.updateStatus(existing.ext_transaction_id, 'verified');
+        await onTransactionVerified(existing.ext_transaction_id, req.user.nama_lengkap || req.user.email || 'Bendahara');
+      } catch (cbErr) {
+        console.error('Callback trigger error on approve:', cbErr.message);
+      }
+    }
 
     return res.status(200).json({
       status: 'success',
@@ -294,6 +304,16 @@ export const deleteTransaction = async (req, res) => {
         status: 'error',
         message: 'Transaksi tidak ditemukan!'
       });
+    }
+
+    // Check if API transaction and trigger callback
+    if (existing.source_type === 'api' && existing.ext_transaction_id) {
+      try {
+        await ExtTransactionModel.updateStatus(existing.ext_transaction_id, 'cancelled');
+        await onTransactionCancelled(existing.ext_transaction_id, 'Deleted from admin dashboard');
+      } catch (cbErr) {
+        console.error('Callback trigger error on delete:', cbErr.message);
+      }
     }
 
     await TransactionModel.delete(id);

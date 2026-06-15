@@ -1,0 +1,280 @@
+openapi: 3.0.3
+info:
+  title: Kroomoney External API Layer
+  description: API Integration Layer for synchronizing customers, transactions, generating invoices and receipts, and receiving status change callbacks.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local Development Server
+paths:
+  /auth/token:
+    post:
+      summary: Get Access Token
+      description: Exchange client API Key and Secret for a JWT bearer token valid for 24 hours.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - api_key
+                - api_secret
+              properties:
+                api_key:
+                  type: string
+                  description: The client's unique API key.
+                api_secret:
+                  type: string
+                  description: The client's unique API secret.
+      responses:
+        '200':
+          description: Successful authentication.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Token berhasil dibuat.
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                        description: JWT Access Token.
+                      expires_at:
+                        type: string
+                        format: date-time
+                      client:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            example: Hosting System
+                          code:
+                            type: string
+                            example: hosting
+        '401':
+          description: Invalid credentials.
+
+  /customers/sync:
+    post:
+      summary: Sync Customer Data
+      description: Create or update customer mapping from the source application.
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - external_customer_id
+                - name
+              properties:
+                external_customer_id:
+                  type: string
+                  example: CUS-998
+                name:
+                  type: string
+                  example: Budi Santoso
+                email:
+                  type: string
+                  format: email
+                  example: budi@domain.com
+                phone:
+                  type: string
+                  example: "08123456789"
+                raw_data:
+                  type: object
+                  description: Arbitrary custom JSON data from source.
+      responses:
+        '201':
+          description: Customer created.
+        '200':
+          description: Customer updated or already synchronized.
+
+  /transactions/sync:
+    post:
+      summary: Sync Transaction Data
+      description: Synchronizes transaction and auto-syncs the customer. Idempotent based on external_transaction_id.
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - external_transaction_id
+                - source_application
+                - customer
+                - transaction
+              properties:
+                external_transaction_id:
+                  type: string
+                  example: TRX-77382
+                source_application:
+                  type: string
+                  example: Hosting System
+                customer:
+                  type: object
+                  required:
+                    - external_customer_id
+                    - name
+                  properties:
+                    external_customer_id:
+                      type: string
+                      example: CUS-998
+                    name:
+                      type: string
+                      example: Budi Santoso
+                    email:
+                      type: string
+                      example: budi@domain.com
+                    phone:
+                      type: string
+                      example: "08123456789"
+                transaction:
+                  type: object
+                  required:
+                    - service_name
+                    - amount
+                    - due_date
+                  properties:
+                    service_name:
+                      type: string
+                      example: VPS Premium Cloud
+                    description:
+                      type: string
+                      example: VPS Hosting 1 Year Subscription
+                    amount:
+                      type: number
+                      example: 1200000
+                    quantity:
+                      type: number
+                      default: 1
+                      example: 1
+                    due_date:
+                      type: string
+                      format: date
+                      example: "2026-07-31"
+      responses:
+        '201':
+          description: Transaction created and synchronized.
+        '200':
+          description: Transaction already exists (returns existing state).
+
+  /payments/verify:
+    post:
+      summary: Verify Payment Programmatically
+      description: Triggers payment approval/verification (marking transaction as lunas/paid) and dispatches callback.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - external_transaction_id
+              properties:
+                external_transaction_id:
+                  type: string
+                  example: TRX-77382
+      responses:
+        '200':
+          description: Payment successfully verified.
+
+  /invoices/generate:
+    post:
+      summary: Generate Invoice
+      description: Generate an invoice and PDF for an external transaction.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - external_transaction_id
+                - due_date
+              properties:
+                external_transaction_id:
+                  type: string
+                  example: TRX-77382
+                due_date:
+                  type: string
+                  format: date
+                  example: "2026-07-31"
+                discount:
+                  type: number
+                  default: 0
+                  example: 50000
+                catatan:
+                  type: string
+                  example: Notes displayed on invoice PDF
+                catatan_internal:
+                  type: string
+                  example: Internal admin notes
+      responses:
+        '201':
+          description: Invoice successfully generated.
+
+  /receipts/generate:
+    post:
+      summary: Generate Receipt
+      description: Mark invoice as paid and auto-generate the payment receipt/kwitansi.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - external_transaction_id
+              properties:
+                external_transaction_id:
+                  type: string
+                  example: TRX-77382
+                payment_method:
+                  type: string
+                  default: Transfer Bank
+                  example: GOPAY
+                received_by:
+                  type: string
+                  default: Bendahara
+                  example: Andi Ahmad N.
+                notes:
+                  type: string
+                  example: Payment for VPS Hosting
+      responses:
+        '201':
+          description: Receipt successfully generated.
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Pass JWT token in Authorization header.
+    SignatureAuth:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: HMAC-SHA256 signature of request body using client API secret.
