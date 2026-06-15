@@ -112,14 +112,25 @@ export default function IncomeList({
                         }
                       </span>
                     </td>
-                    <td className="py-5 px-6 text-right space-x-2">
+                    <td className="py-5 px-6 text-right space-x-1">
+                      {/* Invoice - selalu ada */}
                       <button
                         onClick={() => { setSelectedReceipt(t); setSelectedDocType("Invoice"); }}
                         className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg border-none active:scale-95 transition-all cursor-pointer inline-flex items-center"
-                        title="Lihat Nota"
+                        title="Lihat Invoice"
                       >
                         <FileText className="w-4 h-4" />
                       </button>
+                      {/* Kwitansi - hanya jika Lunas */}
+                      {t.statusPembayaran === "Lunas" && (
+                        <button
+                          onClick={() => { setSelectedReceipt(t); setSelectedDocType("Kwitansi"); }}
+                          className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg border-none active:scale-95 transition-all cursor-pointer inline-flex items-center"
+                          title="Lihat Kwitansi (Lunas)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
                       {t.statusPembayaran === "Pending" && (
                         <button
                           onClick={() => handleApprove(t.id)}
@@ -144,6 +155,7 @@ export default function IncomeList({
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
+
                   </tr>
                 ))
               ) : (

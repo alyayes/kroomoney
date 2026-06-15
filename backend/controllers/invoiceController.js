@@ -2,8 +2,16 @@ import InvoiceModel from '../models/invoiceModel.js';
 import TransactionModel from '../models/transactionModel.js';
 import ReceiptModel from '../models/receiptModel.js';
 import { pool } from '../config/db.js';
+import { generateInvoicePdf, getInvoicePreviewHtml } from '../services/pdfService.js';
+import { sendEmail } from '../services/emailService.js';
+import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-// Helper untuk format response invoice
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const STORAGE_ROOT = join(__dirname, '..', 'storage');
+
+// Helper: map invoice row to API response
 function mapInvoice(i) {
   return {
     id: i.id,
@@ -16,6 +24,7 @@ function mapInvoice(i) {
     subtotal: i.subtotal,
     diskon: i.diskon,
     total: i.total,
+    pdfPath: i.pdf_path || null,
     statusInvoice: i.status_invoice,
     tanggalTerbit: i.tanggal_terbit,
     tanggalJatuhTempo: i.tanggal_jatuh_tempo,
@@ -30,7 +39,7 @@ function mapInvoice(i) {
   };
 }
 
-// GET /api/invoices — Semua invoice
+// GET /api/invoices
 export const getAllInvoices = async (req, res) => {
   try {
     const rows = await InvoiceModel.findAll();
@@ -45,7 +54,7 @@ export const getAllInvoices = async (req, res) => {
   }
 };
 
-// GET /api/invoices/:id — Detail satu invoice
+// GET /api/invoices/:id
 export const getInvoiceById = async (req, res) => {
   try {
     const inv = await InvoiceModel.findById(req.params.id);
@@ -57,30 +66,23 @@ export const getInvoiceById = async (req, res) => {
   }
 };
 
-// POST /api/invoices/generate/:transaksiId — Generate invoice dari transaksi
+// POST /api/invoices/generate/:transaksiId
 export const generateInvoice = async (req, res) => {
   try {
     const { transaksiId } = req.params;
 
-    // Cek transaksi ada
     const trx = await TransactionModel.findById(transaksiId);
     if (!trx) return res.status(404).json({ status: 'error', message: 'Transaksi tidak ditemukan.' });
 
-    // Cek invoice belum ada untuk transaksi ini
     const existing = await InvoiceModel.findByTransaksiId(transaksiId);
     if (existing) {
       return res.status(409).json({
         status: 'error',
-        message: `Invoice sudah ada untuk transaksi ini: ${existing.nomor_invoice}`
+        message: `Invoice sudah ada: ${existing.nomor_invoice}`
       });
     }
 
-    const {
-      tanggalJatuhTempo,
-      diskon = 0,
-      catatan,
-      catatanInternal
-    } = req.body;
+    const { tanggalJatuhTempo, diskon = 0, catatan, catatanInternal, items } = req.body;
 
     if (!tanggalJatuhTempo) {
       return res.status(400).json({ status: 'error', message: 'Tanggal jatuh tempo wajib diisi.' });
@@ -105,13 +107,36 @@ export const generateInvoice = async (req, res) => {
       created_by: req.user.id,
     });
 
-    // Audit log
-    await logAudit(req, `Menerbitkan Invoice ${nomor_invoice} untuk Transaksi #${transaksiId}`);
+    // Save invoice items — default: 1 item from transaction
+    const invoiceItems = (items && items.length > 0) ? items : [{
+      deskripsi: trx.notes || 'Pembelian Layanan',
+      sub_deskripsi: null,
+      kuantitas: trx.kuantitas || 1,
+      harga_satuan: trx.nominal_transfer,
+      diskon_persen: 0,
+      subtotal: trx.nominal_transfer * (trx.kuantitas || 1),
+    }];
+    await InvoiceModel.createItems(insertId, invoiceItems);
+
+    // Generate PDF
+    try {
+      const inv = await InvoiceModel.findById(insertId);
+      const pdfItems = await InvoiceModel.findItemsByInvoiceId(insertId);
+      // Get TTD from user record
+      const [userRow] = await pool.query('SELECT tanda_tangan FROM users WHERE id = ?', [req.user.id]);
+      const ttd = userRow[0]?.tanda_tangan || null;
+      const pdfPath = await generateInvoicePdf(inv, pdfItems, ttd);
+      await InvoiceModel.updatePdfPath(insertId, pdfPath);
+    } catch (pdfErr) {
+      console.error('PDF generation warning (non-fatal):', pdfErr.message);
+    }
+
+    await logAudit(req, `Menerbitkan Invoice ${nomor_invoice} dari Transaksi #${transaksiId}`);
 
     return res.status(201).json({
       status: 'success',
       message: `Invoice ${nomor_invoice} berhasil diterbitkan!`,
-      data: { id: insertId, nomor_invoice, total, tanggal_jatuh_tempo: tanggalJatuhTempo }
+      data: { id: insertId, nomorInvoice: nomor_invoice, total, tanggalJatuhTempo }
     });
   } catch (err) {
     console.error('generateInvoice error:', err);
@@ -119,7 +144,119 @@ export const generateInvoice = async (req, res) => {
   }
 };
 
-// PATCH /api/invoices/:id/status — Update status invoice
+// GET /api/invoices/:id/preview — returns HTML for browser preview
+export const previewInvoice = async (req, res) => {
+  try {
+    const inv = await InvoiceModel.findById(req.params.id);
+    if (!inv) return res.status(404).json({ status: 'error', message: 'Invoice tidak ditemukan.' });
+    const items = await InvoiceModel.findItemsByInvoiceId(inv.id);
+    const [userRow] = await pool.query('SELECT tanda_tangan FROM users WHERE id = ?', [inv.created_by || req.user.id]);
+    const ttd = userRow[0]?.tanda_tangan || null;
+    const html = await getInvoicePreviewHtml(inv, items, ttd);
+    return res.setHeader('Content-Type', 'text/html').send(html);
+  } catch (err) {
+    console.error('previewInvoice error:', err);
+    return res.status(500).json({ status: 'error', message: 'Gagal memuat preview.' });
+  }
+};
+
+// GET /api/invoices/:id/pdf — download PDF
+export const downloadInvoicePdf = async (req, res) => {
+  try {
+    const inv = await InvoiceModel.findById(req.params.id);
+    if (!inv) return res.status(404).json({ status: 'error', message: 'Invoice tidak ditemukan.' });
+
+    // Regenerate if pdf_path not set or file missing
+    let pdfRelPath = inv.pdf_path;
+    if (!pdfRelPath || !existsSync(join(join(__dirname, '..'), pdfRelPath))) {
+      const items = await InvoiceModel.findItemsByInvoiceId(inv.id);
+      const [userRow] = await pool.query('SELECT tanda_tangan FROM users WHERE id = ?', [inv.created_by || req.user.id]);
+      const ttd = userRow[0]?.tanda_tangan || null;
+      pdfRelPath = await generateInvoicePdf(inv, items, ttd);
+      await InvoiceModel.updatePdfPath(inv.id, pdfRelPath);
+    }
+
+    const absPath = join(join(__dirname, '..'), pdfRelPath);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${inv.nomor_invoice}.pdf"`);
+    return res.sendFile(absPath);
+  } catch (err) {
+    console.error('downloadInvoicePdf error:', err);
+    return res.status(500).json({ status: 'error', message: 'Gagal mengunduh PDF.' });
+  }
+};
+
+// POST /api/invoices/:id/send-email
+export const sendInvoiceEmail = async (req, res) => {
+  try {
+    const inv = await InvoiceModel.findById(req.params.id);
+    if (!inv) return res.status(404).json({ status: 'error', message: 'Invoice tidak ditemukan.' });
+
+    const { emailTujuan } = req.body;
+    const to = emailTujuan || req.body.email;
+    if (!to) return res.status(400).json({ status: 'error', message: 'Email tujuan wajib diisi.' });
+
+    // Ensure PDF exists
+    let pdfRelPath = inv.pdf_path;
+    if (!pdfRelPath || !existsSync(join(join(__dirname, '..'), pdfRelPath))) {
+      const items = await InvoiceModel.findItemsByInvoiceId(inv.id);
+      const [userRow] = await pool.query('SELECT tanda_tangan FROM users WHERE id = ?', [inv.created_by || req.user.id]);
+      const ttd = userRow[0]?.tanda_tangan || null;
+      pdfRelPath = await generateInvoicePdf(inv, items, ttd);
+      await InvoiceModel.updatePdfPath(inv.id, pdfRelPath);
+    }
+
+    const total = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(inv.total);
+    const customerName = inv.nama_pelanggan || inv.nama_manual || 'Pelanggan';
+    const tanggalJT = inv.tanggal_jatuh_tempo ? new Date(inv.tanggal_jatuh_tempo).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+
+    await sendEmail({
+      to,
+      subject: `Invoice ${inv.nomor_invoice} — Kroombox`,
+      html: `<p>Halo <strong>${customerName}</strong>,</p>
+             <p>Terlampir adalah invoice <strong>${inv.nomor_invoice}</strong> dengan total tagihan <strong>${total}</strong>.</p>
+             <p>Harap melakukan pembayaran sebelum <strong>${tanggalJT}</strong>.</p>
+             <p>Terima kasih,<br><strong>Tim Kroombox</strong></p>`,
+      attachments: [{ filename: `${inv.nomor_invoice}.pdf`, path: join(join(__dirname, '..'), pdfRelPath) }],
+    });
+
+    await InvoiceModel.update(inv.id, { tanggal_kirim_email: new Date() });
+    await logAudit(req, `Kirim Invoice ${inv.nomor_invoice} via Email ke ${to}`);
+
+    return res.status(200).json({ status: 'success', message: `Invoice berhasil dikirim ke ${to}.` });
+  } catch (err) {
+    console.error('sendInvoiceEmail error:', err);
+    return res.status(500).json({ status: 'error', message: `Gagal kirim email: ${err.message}` });
+  }
+};
+
+// POST /api/invoices/:id/send-wa — returns WA link (frontend opens wa.me)
+export const sendInvoiceWa = async (req, res) => {
+  try {
+    const inv = await InvoiceModel.findById(req.params.id);
+    if (!inv) return res.status(404).json({ status: 'error', message: 'Invoice tidak ditemukan.' });
+
+    const noWa = req.body.noWhatsapp || inv.no_whatsapp || inv.no_wa_manual;
+    if (!noWa) return res.status(400).json({ status: 'error', message: 'Nomor WhatsApp tidak ditemukan.' });
+
+    const total = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(inv.total);
+    const customerName = inv.nama_pelanggan || inv.nama_manual || 'Pelanggan';
+    const tanggalJT = inv.tanggal_jatuh_tempo ? new Date(inv.tanggal_jatuh_tempo).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+    const waNumber = noWa.replace(/\D/g, '').replace(/^0/, '62');
+    const message = encodeURIComponent(`Halo ${customerName},\n\nBerikut invoice dari Kroombox:\n*${inv.nomor_invoice}*\nTotal: *${total}*\nJatuh Tempo: *${tanggalJT}*\n\nMohon segera melakukan pembayaran. Terima kasih!`);
+    const waLink = `https://wa.me/${waNumber}?text=${message}`;
+
+    await InvoiceModel.markSentWa(inv.id);
+    await logAudit(req, `Kirim Invoice ${inv.nomor_invoice} via WhatsApp ke ${noWa}`);
+
+    return res.status(200).json({ status: 'success', waLink, message: 'Link WhatsApp berhasil dibuat.' });
+  } catch (err) {
+    console.error('sendInvoiceWa error:', err);
+    return res.status(500).json({ status: 'error', message: 'Gagal membuat link WhatsApp.' });
+  }
+};
+
+// PATCH /api/invoices/:id/status
 export const updateInvoiceStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -138,12 +275,12 @@ export const updateInvoiceStatus = async (req, res) => {
       ...(status === 'dibayar' ? { tanggal_bayar: new Date() } : {}),
     });
 
-    // Jika dibayar → auto-generate kwitansi
+    // Auto-generate kwitansi bila dibayar
     if (status === 'dibayar') {
       const existingReceipt = await ReceiptModel.findByInvoiceId(id);
       if (!existingReceipt) {
-        const [userRow] = await pool.query('SELECT nama_lengkap FROM users WHERE id = ?', [req.user.id]);
-        const { nomor_kwitansi } = await ReceiptModel.create({
+        const [userRow] = await pool.query('SELECT nama_lengkap, tanda_tangan FROM users WHERE id = ?', [req.user.id]);
+        const { nomor_kwitansi, insertId: receiptId } = await ReceiptModel.create({
           invoice_id: parseInt(id),
           pelanggan_id: inv.pelanggan_id || null,
           nama_manual: inv.nama_manual || null,
@@ -153,23 +290,28 @@ export const updateInvoiceStatus = async (req, res) => {
           diterima_oleh: userRow[0]?.nama_lengkap || 'Bendahara',
           created_by: req.user.id,
         });
-        await logAudit(req, `Kwitansi ${nomor_kwitansi} auto-generated dari Invoice ${inv.nomor_invoice}`);
+        // Generate kwitansi PDF
+        try {
+          const receipt = await ReceiptModel.findById(receiptId);
+          const ttd = userRow[0]?.tanda_tangan || null;
+          const pdfPath = await generateReceiptPdf(receipt, inv, ttd);
+          await ReceiptModel.updatePdfPath(receiptId, pdfPath);
+        } catch (pdfErr) {
+          console.error('Kwitansi PDF warning:', pdfErr.message);
+        }
+        await logAudit(req, `Auto-generate Kwitansi ${nomor_kwitansi} dari Invoice ${inv.nomor_invoice}`);
       }
     }
 
     await logAudit(req, `Update status Invoice ${inv.nomor_invoice} → ${status}`);
-
-    return res.status(200).json({
-      status: 'success',
-      message: `Status invoice berhasil diubah ke "${status}".`
-    });
+    return res.status(200).json({ status: 'success', message: `Status berhasil diubah ke "${status}".` });
   } catch (err) {
     console.error('updateInvoiceStatus error:', err);
-    return res.status(500).json({ status: 'error', message: 'Gagal mengubah status invoice.' });
+    return res.status(500).json({ status: 'error', message: 'Gagal update status.' });
   }
 };
 
-// PUT /api/invoices/:id — Update detail invoice
+// PUT /api/invoices/:id
 export const updateInvoice = async (req, res) => {
   try {
     const { id } = req.params;
@@ -178,7 +320,6 @@ export const updateInvoice = async (req, res) => {
     if (inv.status_invoice === 'dibayar') {
       return res.status(400).json({ status: 'error', message: 'Invoice yang sudah dibayar tidak dapat diedit.' });
     }
-
     const { diskon, catatan, catatanInternal, tanggalJatuhTempo } = req.body;
     await InvoiceModel.update(id, {
       ...(diskon !== undefined ? { diskon, total: Math.max(0, inv.subtotal - diskon) } : {}),
@@ -186,7 +327,6 @@ export const updateInvoice = async (req, res) => {
       ...(catatanInternal !== undefined ? { catatan_internal: catatanInternal } : {}),
       ...(tanggalJatuhTempo ? { tanggal_jatuh_tempo: tanggalJatuhTempo } : {}),
     });
-
     await logAudit(req, `Edit Invoice ${inv.nomor_invoice}`);
     return res.status(200).json({ status: 'success', message: 'Invoice berhasil diperbarui.' });
   } catch (err) {
@@ -195,16 +335,15 @@ export const updateInvoice = async (req, res) => {
   }
 };
 
-// DELETE /api/invoices/:id — Hapus invoice (hanya jika draft)
+// DELETE /api/invoices/:id
 export const deleteInvoice = async (req, res) => {
   try {
     const { id } = req.params;
     const inv = await InvoiceModel.findById(id);
     if (!inv) return res.status(404).json({ status: 'error', message: 'Invoice tidak ditemukan.' });
     if (inv.status_invoice !== 'draft') {
-      return res.status(400).json({ status: 'error', message: 'Hanya invoice berstatus Draft yang dapat dihapus.' });
+      return res.status(400).json({ status: 'error', message: 'Hanya invoice Draft yang dapat dihapus.' });
     }
-
     await InvoiceModel.delete(id);
     await logAudit(req, `Hapus Invoice ${inv.nomor_invoice}`);
     return res.status(200).json({ status: 'success', message: 'Invoice berhasil dihapus.' });
@@ -214,7 +353,9 @@ export const deleteInvoice = async (req, res) => {
   }
 };
 
-// Helper audit log
+// Import needed for receipt PDF generation inside updateInvoiceStatus
+import { generateReceiptPdf } from '../services/pdfService.js';
+
 async function logAudit(req, aktivitas) {
   try {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';

@@ -6,6 +6,9 @@ import {
   markReceiptSentWa,
   markReceiptSentEmail,
   deleteReceipt,
+  previewReceipt,
+  downloadReceiptPdf,
+  sendReceiptEmail,
 } from '../controllers/receiptController.js';
 import { verifyToken } from '../middleware/auth.js';
 
@@ -14,7 +17,10 @@ router.use(verifyToken);
 
 router.get('/', getAllReceipts);
 router.get('/:id', getReceiptById);
+router.get('/:id/preview', previewReceipt);
+router.get('/:id/pdf', downloadReceiptPdf);
 router.post('/generate/:invoiceId', generateReceipt);
+router.post('/:id/send-email', sendReceiptEmail);
 router.patch('/:id/send-wa', markReceiptSentWa);
 router.patch('/:id/send-email', markReceiptSentEmail);
 router.delete('/:id', deleteReceipt);

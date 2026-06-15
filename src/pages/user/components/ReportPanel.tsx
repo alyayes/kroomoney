@@ -239,7 +239,16 @@ export default function ReportPanel({
                   </td>
                   <td className="px-6 py-5 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      {t.tipe === "Debit" ? (
+                      {/* Invoice - selalu tersedia untuk semua transaksi */}
+                      <button
+                        onClick={() => { setSelectedReceipt(t); setSelectedDocType("Invoice"); }}
+                        className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm border-none cursor-pointer"
+                        title="Lihat Invoice"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                      {/* Kwitansi - hanya jika Debit dan Lunas */}
+                      {t.tipe === "Debit" && (
                         t.statusPembayaran === "Lunas" ? (
                           <button
                             onClick={() => { setSelectedReceipt(t); setSelectedDocType("Kwitansi"); }}
@@ -251,13 +260,13 @@ export default function ReportPanel({
                         ) : (
                           <button
                             disabled
-                            className="p-2 bg-slate-100 text-slate-400 rounded-xl cursor-not-allowed opacity-60 border-none"
+                            className="p-2 bg-slate-100 text-slate-300 rounded-xl cursor-not-allowed opacity-50 border-none"
                             title="Kwitansi hanya tersedia setelah pembayaran lunas."
                           >
                             <FileText className="w-4 h-4" />
                           </button>
                         )
-                      ) : null}
+                      )}
                       <button
                         onClick={() => handleEdit(t)}
                         className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm border-none cursor-pointer"
@@ -270,6 +279,7 @@ export default function ReportPanel({
                       </button>
                     </div>
                   </td>
+
                 </tr>
               ))}
               {filteredTransactions.length === 0 && (

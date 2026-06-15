@@ -40,6 +40,19 @@ export default function App() {
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [hasSubmittedRegister, setHasSubmittedRegister] = useState(false);
 
+  // Navigate between views with state cleanup
+  const navigateTo = (target: "landing" | "login" | "register" | "forgot-password" | "authenticated") => {
+    setIsSubmitting(false);
+    setShowPassword(false);
+    if (target !== "forgot-password") {
+      setResetEmail("");
+      setResetOtp("");
+      setNewPassword("");
+      setResetStep(1);
+    }
+    setView(target);
+  };
+
   // Profile state
   const [profile, setProfile] = useState(() => {
     const savedProfile = localStorage.getItem("kroombox_user_profile");
@@ -362,7 +375,7 @@ export default function App() {
 
             <div className="pt-12 flex items-center justify-center gap-4">
               <button
-                onClick={() => setView("login")}
+                onClick={() => navigateTo("login")}
                 className="group flex items-center gap-4 bg-blue-600 text-white px-12 py-5 rounded-full font-black text-base shadow-2xl shadow-blue-200 hover:bg-blue-700 hover:-translate-y-1 transition-all active:scale-95 cursor-pointer border-none"
               >
                 <span>MASUK SEKARANG</span>
@@ -408,7 +421,8 @@ export default function App() {
         isSubmitting={isSubmitting}
         showPassword={showPassword}
         setShowPassword={setShowPassword}
-        setView={setView}
+        setView={navigateTo}
+        notification={notification}
       />
     );
   }
@@ -423,7 +437,7 @@ export default function App() {
         showRegisterPassword={showRegisterPassword}
         setShowRegisterPassword={setShowRegisterPassword}
         hasSubmittedRegister={hasSubmittedRegister}
-        setView={setView}
+        setView={navigateTo}
       />
     );
   }
@@ -443,7 +457,7 @@ export default function App() {
         setIsSubmitting={setIsSubmitting}
         showPassword={showPassword}
         setShowPassword={setShowPassword}
-        setView={setView}
+        setView={navigateTo}
         apiRequest={apiRequest}
         setNotification={setNotification}
       />

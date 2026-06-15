@@ -183,8 +183,15 @@ export function useUserDashboard({
     try {
       const profileRes = await apiRequest("/profile");
       if (profileRes && profileRes.data) {
-        setProfile(profileRes.data);
-        localStorage.setItem("kroombox_user_profile", JSON.stringify(profileRes.data));
+        // Preserve locally-stored tandaTangan & fotoProfil if backend doesn't have them
+        const localProfile = JSON.parse(localStorage.getItem("kroombox_user_profile") || "{}");
+        const mergedProfile = {
+          ...profileRes.data,
+          tandaTangan: profileRes.data.tandaTangan || localProfile.tandaTangan || "",
+          fotoProfil: profileRes.data.fotoProfil || localProfile.fotoProfil || "",
+        };
+        setProfile(mergedProfile);
+        localStorage.setItem("kroombox_user_profile", JSON.stringify(mergedProfile));
       }
 
       const transRes = await apiRequest("/transactions");
@@ -284,8 +291,10 @@ export function useUserDashboard({
   };
 
   const handleAmountChange = (value: string) => {
-    const numericValue = value.replace(/\D/g, "");
-    setForm(prev => ({ ...prev, jumlah: numericValue }));
+    // Strip dots and any non-digit chars, then re-format with thousand separators
+    const numericValue = value.replace(/\./g, "").replace(/\D/g, "");
+    const formatted = numericValue ? parseInt(numericValue, 10).toLocaleString("id-ID") : "";
+    setForm(prev => ({ ...prev, jumlah: formatted }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -302,7 +311,7 @@ export function useUserDashboard({
       statusPembayaran: form.statusPembayaran,
       statusDokumen: form.statusDokumen,
       sertakanTandaTangan: form.sertakanTandaTangan,
-      jumlah: Number(form.jumlah),
+      jumlah: Number(form.jumlah.replace(/\./g, "")),
       kuantitas: Number(form.kuantitas),
       namaPembeli: form.namaPembeli,
       noTelepon: form.noTelepon,
@@ -378,7 +387,7 @@ export function useUserDashboard({
       statusPembayaran: trx.statusPembayaran,
       statusDokumen: trx.statusDokumen || 'Draft',
       sertakanTandaTangan: !!trx.sertakanTandaTangan,
-      jumlah: trx.jumlah.toString(),
+      jumlah: trx.jumlah.toLocaleString("id-ID"),
       kuantitas: trx.kuantitas.toString(),
       namaPembeli: trx.namaPembeli,
       noTelepon: trx.noTelepon,
@@ -401,7 +410,7 @@ export function useUserDashboard({
       statusPembayaran: form.statusPembayaran,
       statusDokumen: form.statusDokumen,
       sertakanTandaTangan: form.sertakanTandaTangan,
-      jumlah: Number(form.jumlah),
+      jumlah: Number(form.jumlah.replace(/\./g, "")),
       kuantitas: Number(form.kuantitas),
       namaPembeli: form.namaPembeli,
       noTelepon: form.noTelepon,

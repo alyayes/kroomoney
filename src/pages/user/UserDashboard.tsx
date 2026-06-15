@@ -27,6 +27,8 @@ import ExpenseList from "./components/ExpenseList";
 import PaymentPending from "./components/PaymentPending";
 import ReportPanel from "./components/ReportPanel";
 import UserProfile from "./components/UserProfile";
+import InvoicePanel from "./components/InvoicePanel";
+import KwitansiPanel from "./components/KwitansiPanel";
 
 interface Profile {
   nama: string;
@@ -101,6 +103,8 @@ export default function UserDashboard({
     setIsOffline,
     onLogout
   });
+
+  const [expenseTab, setExpenseTab] = React.useState<"pengeluaran" | "invoice" | "kwitansi">("pengeluaran");
 
   const formatRupiah = (number: number): string => {
     return new Intl.NumberFormat("id-ID", {
@@ -209,15 +213,46 @@ export default function UserDashboard({
                   setSelectedDocType={setSelectedDocType}
                 />
               ) : activeMenu === "Pengeluaran" ? (
-                <ExpenseList
-                  filteredTransactions={filteredTransactions}
-                  searchTerm={searchTerm}
-                  setSearchTerm={setSearchTerm}
-                  exportToExcel={exportToExcel}
-                  handleEdit={handleEdit}
-                  handleDelete={handleDelete}
-                  formatRupiah={formatRupiah}
-                />
+                <div className="space-y-4 w-full">
+                  <div className="flex bg-white p-2 rounded-2xl border border-slate-100 shadow-sm gap-2 w-max mx-auto md:mx-0">
+                    <button
+                      onClick={() => setExpenseTab("pengeluaran")}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${expenseTab === "pengeluaran" ? "bg-blue-600 text-white shadow-md shadow-blue-600/20" : "text-slate-400 hover:bg-slate-50"}`}
+                    >
+                      Pengeluaran
+                    </button>
+                    <button
+                      onClick={() => setExpenseTab("invoice")}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${expenseTab === "invoice" ? "bg-blue-600 text-white shadow-md shadow-blue-600/20" : "text-slate-400 hover:bg-slate-50"}`}
+                    >
+                      Invoice
+                    </button>
+                    <button
+                      onClick={() => setExpenseTab("kwitansi")}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${expenseTab === "kwitansi" ? "bg-blue-600 text-white shadow-md shadow-blue-600/20" : "text-slate-400 hover:bg-slate-50"}`}
+                    >
+                      Kwitansi
+                    </button>
+                  </div>
+                  {expenseTab === "pengeluaran" && (
+                    <ExpenseList
+                      filteredTransactions={filteredTransactions}
+                      searchTerm={searchTerm}
+                      setSearchTerm={setSearchTerm}
+                      exportToExcel={exportToExcel}
+                      handleEdit={handleEdit}
+                      handleDelete={handleDelete}
+                      formatRupiah={formatRupiah}
+                    />
+                  )}
+                  {expenseTab === "invoice" && (
+                    <InvoicePanel formatRupiah={formatRupiah} />
+                  )}
+                  {expenseTab === "kwitansi" && (
+                    <KwitansiPanel formatRupiah={formatRupiah} />
+                  )}
+                </div>
+
               ) : activeMenu === "Pembayaran" ? (
                 <PaymentPending
                   filteredTransactions={filteredTransactions}
@@ -649,10 +684,12 @@ export default function UserDashboard({
                   id="invoice-content"
                 >
                   {selectedDocType === "Kwitansi" ? (
-                    <div className="border-2 border-slate-900 p-10 h-full flex flex-col justify-between font-sans text-slate-900 relative box-border">
-                      <div className="flex justify-between items-center mb-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-14 h-14 text-[#002855]">
+                    /* ====== KWITANSI DESIGN ====== */
+                    <div className="border border-slate-400 h-full flex flex-col font-sans text-slate-900 box-border" style={{ fontFamily: 'Georgia, serif' }}>
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-8 pt-6 pb-4 border-b border-slate-400">
+                        <div className="flex items-center gap-2">
+                          <div className="w-12 h-12 text-[#002855]">
                             <svg viewBox="0 0 100 100" className="w-full h-full fill-none stroke-[#002855] stroke-[4]">
                               <path d="M20 30 L50 15 L80 30 L80 70 L50 85 L20 70 Z" />
                               <path d="M20 30 L50 45 L80 30" />
@@ -661,79 +698,101 @@ export default function UserDashboard({
                               <path d="M65 38 L65 78" />
                             </svg>
                           </div>
-                          <div className="flex flex-col text-left">
-                            <span className="text-[26px] font-black tracking-tight text-[#002855] leading-none mb-0.5">Kroom</span>
-                            <span className="text-[26px] font-black tracking-tight text-[#003d7e] leading-none">box</span>
+                          <div className="flex flex-col leading-none">
+                            <span className="text-[22px] font-black text-[#002855]">Kroom</span>
+                            <span className="text-[22px] font-black text-[#003d7e]">box</span>
                           </div>
                         </div>
-                        <h1 className="text-2xl font-black uppercase tracking-widest text-[#002855] text-center border-b-4 border-[#002855] pb-2">
-                          KWITANSI RESMI PEMBAYARAN
+                        <h1 className="text-xl font-black uppercase tracking-[0.15em] text-[#002855] border-b-2 border-[#002855] pb-1">
+                          KWITANSI PEMBAYARAN
                         </h1>
-                        <div className="w-48 text-right flex flex-col justify-end text-xs font-bold text-slate-400">
-                          <span>ORIGINAL COPY</span>
+                        <div className="w-40" />
+                      </div>
+
+                      {/* No & Tanggal */}
+                      <div className="flex justify-between px-8 py-4 text-sm">
+                        <span>No. : <span className="font-bold font-mono">{selectedReceipt.trxId.split('-')[1] || selectedReceipt.id}</span></span>
+                        <span>Tanggal : <span className="font-bold">{new Date(selectedReceipt.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span></span>
+                      </div>
+
+                      {/* Body */}
+                      <div className="flex-grow px-8 py-2 space-y-5 text-sm">
+                        <div className="flex gap-2">
+                          <span className="min-w-[200px] text-slate-600">Terima Dari</span>
+                          <span>: <strong className="text-slate-900 ml-1">{selectedReceipt.namaPembeli}</strong></span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="min-w-[200px] text-slate-600">Terbilang</span>
+                          <span>: <strong className="ml-1">{terbilang(selectedReceipt.jumlah * selectedReceipt.kuantitas)} Rupiah</strong></span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="min-w-[200px] text-slate-600">Untuk Pembayaran</span>
+                          <span>: <strong className="ml-1">{selectedReceipt.notes || "Nota Terlampir"}</strong></span>
                         </div>
                       </div>
 
-                      <div className="flex justify-between mb-8 text-sm font-bold bg-slate-50 px-6 py-3 rounded-xl">
-                        <span>No. Kwitansi: <span className="font-mono text-blue-600">KWT-{selectedReceipt.trxId.split('-')[1] || selectedReceipt.id}</span></span>
-                        <span>Tanggal Bayar: {new Date(selectedReceipt.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                      </div>
-
-                      <div className="space-y-6 mb-8 flex-grow text-left">
-                        <div className="flex gap-4 items-baseline border-b border-slate-200 pb-3">
-                          <span className="shrink-0 min-w-[200px] text-sm font-bold uppercase tracking-wider text-slate-400">Sudah Diterima Dari:</span>
-                          <span className="text-lg font-extrabold text-[#002855] uppercase">{selectedReceipt.namaPembeli}</span>
-                        </div>
-                        <div className="flex gap-4 items-baseline border-b border-slate-200 pb-3">
-                          <span className="shrink-0 min-w-[200px] text-sm font-bold uppercase tracking-wider text-slate-400">Sejumlah Terbilang:</span>
-                          <span className="text-base font-extrabold bg-blue-50 text-blue-700 px-4 py-2 rounded-xl italic">
-                            "{terbilang(selectedReceipt.jumlah * selectedReceipt.kuantitas)} Rupiah"
-                          </span>
-                        </div>
-                        <div className="flex gap-4 items-baseline border-b border-slate-200 pb-3">
-                          <span className="shrink-0 min-w-[200px] text-sm font-bold uppercase tracking-wider text-slate-400">Untuk Pembayaran:</span>
-                          <span className="text-base font-bold text-slate-700">{selectedReceipt.notes || "Penyelesaian Tagihan Layanan KroomBox"}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-end mt-4">
-                        <div className="text-4xl font-black tracking-tight text-emerald-600 bg-emerald-50 px-8 py-4 rounded-3xl border border-emerald-100 flex items-center gap-2 shadow-sm">
-                          <span className="text-xl font-bold">Rp</span>
-                          <span>{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</span>
-                          <span className="text-xl font-bold">,-</span>
+                      {/* Footer */}
+                      <div className="flex justify-between items-end px-8 pb-8 mt-4">
+                        {/* Big amount */}
+                        <div className="text-4xl font-black tracking-tight text-slate-900">
+                          Rp{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')},-
                         </div>
 
-                        <div className="text-center w-[250px] flex flex-col items-center">
-                          <p className="text-[11px] font-bold text-slate-500 mb-1">
+                        {/* Signature */}
+                        <div className="text-center w-[220px] flex flex-col items-center relative">
+                          <p className="text-xs text-slate-600 mb-1">
                             Bandung, {new Date(selectedReceipt.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                           </p>
-                          <p className="text-xs font-semibold mb-1">Mengetahui,</p>
-                          <p className="text-xs font-bold uppercase tracking-wider mb-2 text-[#002855]">Bendahara</p>
-
-                          <div className="relative w-full h-24 flex items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                            {profile.tandaTangan && selectedReceipt.sertakanTandaTangan ? (
+                          <div className="relative w-full h-20 flex items-center justify-center">
+                            {/* Logo watermark behind signature */}
+                            <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                              <svg viewBox="0 0 100 100" className="w-16 h-16 fill-none stroke-[#002855] stroke-[4]">
+                                <path d="M20 30 L50 15 L80 30 L80 70 L50 85 L20 70 Z" />
+                                <path d="M20 30 L50 45 L80 30" />
+                                <path d="M50 45 L50 85" />
+                                <path d="M35 38 L35 78" />
+                                <path d="M65 38 L65 78" />
+                              </svg>
+                            </div>
+                            {profile.tandaTangan ? (
                               <img
                                 src={profile.tandaTangan}
-                                alt="Tanda Tangan Digital"
-                                className="max-h-20 max-w-[200px] object-contain filter contrast-125 select-none mix-blend-multiply"
+                                alt="Tanda Tangan"
+                                className="relative z-10 max-h-16 max-w-[180px] object-contain mix-blend-multiply select-none"
                               />
                             ) : (
-                              <span className="text-[10px] text-red-500 font-semibold uppercase tracking-wider text-center px-4">
-                                Tanda Tangan Belum Diunggah / Tidak Disertakan
+                              <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider text-center relative z-10">
+                                Tanda Tangan Bendahara
                               </span>
                             )}
                           </div>
-                          
-                          <p className="text-xs font-extrabold mt-2 text-slate-800 border-b border-slate-800 pb-0.5 px-3">
+                          <p className="text-xs font-extrabold text-slate-800 border-b border-slate-800 pb-0.5 px-4 mt-1">
                             {profile.nama}
                           </p>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="h-full flex flex-col justify-between font-sans text-slate-900 relative box-border">
-                      <div className="flex justify-between items-start mb-6">
-                        <div className="space-y-1">
+                    /* ====== INVOICE DESIGN ====== */
+                    <div className="h-full flex font-sans text-slate-900 box-border">
+                      {/* Left rotated label */}
+                      <div className="w-14 shrink-0 flex items-center justify-center bg-white border-r border-slate-100">
+                        <div
+                          className="text-slate-700 font-black text-lg tracking-wide whitespace-nowrap select-none"
+                          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.05em' }}
+                        >
+                          Invoice {selectedReceipt.trxId.split('-')[1] || selectedReceipt.id}
+                        </div>
+                      </div>
+
+                      {/* Main content */}
+                      <div className="flex-1 flex flex-col p-8 overflow-hidden">
+                        {/* Top header */}
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Kroombox</h1>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Ko+Lab Hub Studio, Gd.Selaru lt.4 Universitas Telkom</p>
+                          </div>
                           <div className="flex items-center gap-2">
                             <div className="w-10 h-10 text-[#f05252]">
                               <svg viewBox="0 0 100 100" className="w-full h-full fill-none stroke-current stroke-[4]">
@@ -744,134 +803,109 @@ export default function UserDashboard({
                                 <path d="M65 38 L65 78" />
                               </svg>
                             </div>
-                            <div className="flex flex-col text-left">
-                              <span className="text-xl font-black tracking-tight text-slate-900 leading-none mb-0.5">Kroom</span>
-                              <span className="text-xl font-black tracking-tight text-slate-700 leading-none">box</span>
+                            <div className="flex flex-col leading-none">
+                              <span className="text-xl font-black text-slate-900">Kroom</span>
+                              <span className="text-xl font-black text-slate-600">box</span>
                             </div>
                           </div>
-                          <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase mt-2 text-left">NOTA DEBIT TRANSAKSI</h1>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left">Bukti Pembelian / Invoice Penagihan</p>
                         </div>
-                        <div className="text-right space-y-1">
-                          <h2 className="text-lg font-bold text-slate-800">KroomBox Corp</h2>
-                          <p className="text-[11px] font-medium text-slate-500 leading-relaxed max-w-[280px]">
-                            Gd. Selaru lt. 4 Universitas Telkom, Bandung<br />
-                            HP/WA: +62 878-9000-4465
-                          </p>
-                        </div>
-                      </div>
 
-                      <div className="h-[2px] bg-[#f05252]/25 w-full mb-4" />
+                        {/* Divider */}
+                        <div className="h-[1.5px] bg-[#f05252] mb-4" />
 
-                      <div className="grid grid-cols-2 gap-12 mb-6 text-left">
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <h3 className="text-[#f05252] font-black text-[10px] uppercase tracking-wider mb-2">Rincian Nota</h3>
-                          <p className="text-xs font-bold text-slate-900 mb-1">Nomor Nota: <span className="font-mono text-blue-600">NTA-{selectedReceipt.trxId.split('-')[1] || selectedReceipt.id}</span></p>
-                          <p className="text-xs font-bold text-slate-900">
-                            Tanggal: {new Date(selectedReceipt.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                          </p>
-                        </div>
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <h3 className="text-[#f05252] font-black text-[10px] uppercase tracking-wider mb-2">Pelanggan</h3>
-                          <p className="text-xs font-bold text-slate-900 uppercase">
-                            {selectedReceipt.namaPembeli || "Pembelian Manual"}
-                          </p>
-                          {selectedReceipt.noTelepon && (
-                            <p className="text-[11px] text-slate-500 mt-1 font-semibold">HP/WA: {selectedReceipt.noTelepon}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="mb-4 flex-grow relative z-10 overflow-hidden">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-[#f05252] text-white text-[11px] uppercase tracking-wider font-bold">
-                              <th className="px-5 py-3 rounded-l-xl">Deskripsi Barang / Jasa</th>
-                              <th className="px-5 py-3 text-center">Jumlah</th>
-                              <th className="px-5 py-3 text-center">Harga Satuan</th>
-                              <th className="px-5 py-3 text-right rounded-r-xl">Subtotal</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr className="border-b border-slate-100 hover:bg-slate-50/50">
-                              <td className="px-5 py-4 text-left">
-                                <p className="font-bold text-xs text-slate-900">{selectedReceipt.notes || "Pembelian Produk / Layanan"}</p>
-                                {selectedReceipt.userId && (
-                                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Customer ID: {selectedReceipt.userId}</p>
-                                )}
-                              </td>
-                              <td className="px-5 py-4 text-center text-xs font-bold text-slate-900">{selectedReceipt.kuantitas}</td>
-                              <td className="px-5 py-4 text-center text-xs font-bold text-slate-900">Rp{selectedReceipt.jumlah.toLocaleString('id-ID')}</td>
-                              <td className="px-5 py-4 text-right text-xs font-bold text-slate-900">Rp{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</td>
-                            </tr>
-                            {[...Array(2)].map((_, i) => (
-                              <tr key={"spacer-" + i} className="border-b border-slate-50/40 h-8">
-                                <td colSpan={4} className="py-0">&nbsp;</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="flex justify-between items-start mt-4">
-                        <div className="flex gap-8 items-start text-left">
+                        {/* Date + Billing For */}
+                        <div className="grid grid-cols-2 gap-8 mb-5 text-sm">
                           <div>
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Status Pembayaran</h4>
-                            <span className={`inline-flex items-center px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider ${selectedReceipt.statusPembayaran === "Lunas" ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : selectedReceipt.statusPembayaran === "DP" ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                            <p className="text-[#f05252] font-black text-[10px] uppercase tracking-wider mb-1">Date</p>
+                            <p className="font-bold text-slate-900">
+                              {new Date(selectedReceipt.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[#f05252] font-black text-[10px] uppercase tracking-wider mb-1">Billing For</p>
+                            <p className="font-bold text-slate-900 uppercase">{selectedReceipt.namaPembeli || "Pelanggan"}</p>
+                            {selectedReceipt.noTelepon && (
+                              <p className="text-[10px] text-slate-400 font-medium">WA: {selectedReceipt.noTelepon}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="h-[1px] bg-slate-100 mb-4" />
+
+                        {/* Items Table */}
+                        <div className="flex-grow overflow-hidden">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-[#f05252] text-white text-[11px] uppercase tracking-wider font-bold">
+                                <th className="px-4 py-2.5 rounded-l-lg">Description</th>
+                                <th className="px-4 py-2.5 text-center">Quantity</th>
+                                <th className="px-4 py-2.5 text-center">Price</th>
+                                <th className="px-4 py-2.5 text-center">Discount</th>
+                                <th className="px-4 py-2.5 text-right rounded-r-lg">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr className="border-b border-slate-100 text-xs font-medium">
+                                <td className="px-4 py-3">
+                                  <p className="font-bold text-slate-900">{selectedReceipt.notes || "Pembelian Produk / Layanan"}</p>
+                                  {selectedReceipt.userId && (
+                                    <p className="text-[10px] text-slate-400 mt-0.5">Customer ID: {selectedReceipt.userId}</p>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center font-bold">{selectedReceipt.kuantitas}</td>
+                                <td className="px-4 py-3 text-center font-bold">Rp{selectedReceipt.jumlah.toLocaleString('id-ID')}</td>
+                                <td className="px-4 py-3 text-center font-bold">0%</td>
+                                <td className="px-4 py-3 text-right font-bold">Rp{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</td>
+                              </tr>
+                              {[...Array(3)].map((_, i) => (
+                                <tr key={"spacer-" + i} className="border-b border-slate-50 h-7">
+                                  <td colSpan={5} className="py-0">&nbsp;</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="h-[1px] bg-slate-200 mt-2 mb-3" />
+
+                        {/* Totals + Status */}
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <span className={`text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-lg ${selectedReceipt.statusPembayaran === 'Lunas' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
                               {selectedReceipt.statusPembayaran}
                             </span>
                           </div>
-                          <div>
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Dibuat Oleh</h4>
-                            <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 uppercase">
-                              {profile.nama}
-                            </span>
+                          <div className="w-[280px] space-y-1.5 text-xs">
+                            <div className="flex justify-between text-slate-500">
+                              <span>Subtotal</span>
+                              <span className="font-bold text-slate-800">Rp{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-500 border-b border-slate-100 pb-1.5">
+                              <span>Sales Tax</span>
+                              <span className="font-bold text-slate-800">0</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600">
+                              <span>Total</span>
+                              <span className="font-bold">Rp{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</span>
+                            </div>
+                            <div className="flex justify-between font-black text-sm pt-1 border-t-2 border-[#f05252]">
+                              <span className="text-slate-900">Amount Due</span>
+                              <span className="text-[#f05252]">Rp{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="w-full max-w-[300px] space-y-2 text-left">
-                          <div className="flex justify-between items-center text-xs font-bold">
-                            <span className="text-slate-500 uppercase tracking-wide">Total Belanja</span>
-                            <span className="text-slate-800 font-extrabold">Rp{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs font-bold border-b border-slate-100 pb-2">
-                            <span className="text-slate-500 uppercase tracking-wide">PPN (0%)</span>
-                            <span className="text-slate-800 font-extrabold">Rp0</span>
-                          </div>
-                          <div className="flex justify-between items-center text-sm font-black pt-2 border-t-2 border-[#f05252]">
-                            <span className="text-slate-900 uppercase">Grand Total</span>
-                            <span className="text-[#f05252]">Rp{(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</span>
-                          </div>
-                        </div>
-
-                        <div className="text-center w-[250px] flex flex-col items-center">
-                          <p className="text-[11px] font-bold text-slate-500 mb-1">
-                            Bandung, {new Date(selectedReceipt.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                          </p>
-                          <p className="text-xs font-semibold mb-1">Mengetahui,</p>
-                          <p className="text-xs font-bold uppercase tracking-wider mb-2 text-[#f05252]">Bendahara</p>
-
-                          <div className="relative w-full h-24 flex items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                            {profile.tandaTangan && selectedReceipt.sertakanTandaTangan ? (
-                              <img
-                                src={profile.tandaTangan}
-                                alt="Tanda Tangan Digital"
-                                className="max-h-20 max-w-[200px] object-contain filter contrast-125 select-none mix-blend-multiply"
-                              />
-                            ) : (
-                              <span className="text-[10px] text-red-500 font-semibold uppercase tracking-wider text-center px-4">
-                                Tanda Tangan Belum Diunggah / Tidak Disertakan
-                              </span>
-                            )}
-                          </div>
-                          
-                          <p className="text-xs font-extrabold mt-2 text-slate-800 border-b border-slate-800 pb-0.5 px-3">
-                            {profile.nama}
-                          </p>
+                        {/* Footer */}
+                        <div className="mt-4 pt-3 border-t border-slate-100 flex gap-8 text-[10px] text-slate-400 font-medium">
+                          <span>Tel: <strong className="text-slate-600">+62-878-9000-4465</strong></span>
+                          <span>Email: <strong className="text-slate-600">kroombox@gmail.com</strong></span>
+                          <span>Web: <strong className="text-slate-600">kroombox.com</strong></span>
                         </div>
                       </div>
                     </div>
                   )}
+
                 </div>
               </div>
             </motion.div>

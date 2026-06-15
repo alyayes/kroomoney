@@ -1,17 +1,18 @@
 import { pool } from '../config/db.js';
 
 class InvoiceModel {
-  // Generate nomor invoice otomatis: INV-YYYY-NNNNN
+  // Generate nomor invoice otomatis: INV-YYYYMM-XXXX
   static async generateNomor() {
-    const year = new Date().getFullYear();
-    const prefix = `INV-${year}-`;
+    const now = new Date();
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prefix = `INV-${yyyymm}-`;
     const [rows] = await pool.query(
       `SELECT nomor_invoice FROM invoices WHERE nomor_invoice LIKE ? ORDER BY id DESC LIMIT 1`,
       [`${prefix}%`]
     );
-    if (rows.length === 0) return `${prefix}00001`;
-    const lastNum = parseInt(rows[0].nomor_invoice.replace(prefix, ''), 10);
-    return `${prefix}${String(lastNum + 1).padStart(5, '0')}`;
+    if (rows.length === 0) return `${prefix}0001`;
+    const lastNum = parseInt(rows[0].nomor_invoice.split('-').pop(), 10);
+    return `${prefix}${String(lastNum + 1).padStart(4, '0')}`;
   }
 
   // Get all invoices joined with customer name
@@ -123,8 +124,41 @@ class InvoiceModel {
     return result.affectedRows;
   }
 
+  // Update pdf_path after PDF generation
+  static async updatePdfPath(id, pdf_path) {
+    await pool.query('UPDATE invoices SET pdf_path = ? WHERE id = ?', [pdf_path, id]);
+  }
+
+  // Create invoice items (multi-item support)
+  static async createItems(invoice_id, items) {
+    if (!items || items.length === 0) return;
+    const values = items.map(item => [
+      invoice_id,
+      item.deskripsi || '',
+      item.sub_deskripsi || null,
+      item.kuantitas || 1,
+      item.harga_satuan || 0,
+      item.diskon_persen || 0,
+      item.subtotal || 0
+    ]);
+    await pool.query(
+      `INSERT INTO invoice_items (invoice_id, deskripsi, sub_deskripsi, kuantitas, harga_satuan, diskon_persen, subtotal) VALUES ?`,
+      [values]
+    );
+  }
+
+  // Get items for an invoice
+  static async findItemsByInvoiceId(invoice_id) {
+    const [rows] = await pool.query(
+      'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY id ASC',
+      [invoice_id]
+    );
+    return rows;
+  }
+
   // Delete invoice
   static async delete(id) {
+    await pool.query('DELETE FROM invoice_items WHERE invoice_id = ?', [id]);
     await pool.query('DELETE FROM invoices WHERE id = ?', [id]);
   }
 }

@@ -1,17 +1,18 @@
 import { pool } from '../config/db.js';
 
 class ReceiptModel {
-  // Generate nomor kwitansi otomatis: KWT-YYYY-NNNNN
+  // Generate nomor kwitansi otomatis: KWT-YYYYMM-XXXX
   static async generateNomor() {
-    const year = new Date().getFullYear();
-    const prefix = `KWT-${year}-`;
+    const now = new Date();
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prefix = `KWT-${yyyymm}-`;
     const [rows] = await pool.query(
       `SELECT nomor_kwitansi FROM receipts WHERE nomor_kwitansi LIKE ? ORDER BY id DESC LIMIT 1`,
       [`${prefix}%`]
     );
-    if (rows.length === 0) return `${prefix}00001`;
-    const lastNum = parseInt(rows[0].nomor_kwitansi.replace(prefix, ''), 10);
-    return `${prefix}${String(lastNum + 1).padStart(5, '0')}`;
+    if (rows.length === 0) return `${prefix}0001`;
+    const lastNum = parseInt(rows[0].nomor_kwitansi.split('-').pop(), 10);
+    return `${prefix}${String(lastNum + 1).padStart(4, '0')}`;
   }
 
   // Get all receipts joined with customer and invoice data
@@ -93,6 +94,11 @@ class ReceiptModel {
       'UPDATE receipts SET status_kirim = "terkirim", tanggal_kirim_email = NOW() WHERE id = ?',
       [id]
     );
+  }
+
+  // Update pdf_path after PDF generation
+  static async updatePdfPath(id, pdf_path) {
+    await pool.query('UPDATE receipts SET pdf_path = ? WHERE id = ?', [pdf_path, id]);
   }
 
   // Delete receipt

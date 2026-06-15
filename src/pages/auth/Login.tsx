@@ -13,9 +13,11 @@ import {
   Smartphone,
   LineChart,
   PieChart as PieChartIcon,
-  Activity
+  Activity,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 
 interface LoginForm {
   email: string;
@@ -30,6 +32,7 @@ interface LoginProps {
   showPassword: boolean;
   setShowPassword: React.Dispatch<React.SetStateAction<boolean>>;
   setView: React.Dispatch<React.SetStateAction<"landing" | "login" | "register" | "forgot-password" | "authenticated">>;
+  notification?: { message: string; type: "success" | "error" } | null;
 }
 
 export default function Login({
@@ -39,7 +42,8 @@ export default function Login({
   isSubmitting,
   showPassword,
   setShowPassword,
-  setView
+  setView,
+  notification
 }: LoginProps) {
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row font-jakarta overflow-hidden w-full">
@@ -138,6 +142,31 @@ export default function Login({
           <p className="text-xs font-bold text-slate-300 uppercase tracking-widest leading-relaxed">© 2025 KROOMBOX ADMINISTRATOR. <br /> SECURED BY KROOMBOX SECURITY.</p>
         </div>
       </motion.div>
+
+      {/* Notifications */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-[100] border ${
+              notification.type === "success"
+                ? "bg-emerald-50 border-emerald-100 text-emerald-800"
+                : "bg-red-50 border-red-100 text-red-800"
+            }`}
+          >
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${notification.type === "success" ? "bg-emerald-500" : "bg-red-500"}`}>
+              {notification.type === "success" ? (
+                <CheckCircle2 className="w-5 h-5" />
+              ) : (
+                <AlertCircle className="w-5 h-5" />
+              )}
+            </div>
+            <span className="font-bold text-sm">{notification.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* RIGHT SIDE (60%) - Visual Showcase */}
       <div className="hidden md:flex flex-1 relative bg-gradient-to-br from-blue-50 via-indigo-50/50 to-white items-center justify-center overflow-hidden p-12">

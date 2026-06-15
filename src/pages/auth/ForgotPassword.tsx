@@ -133,6 +133,9 @@ export default function ForgotPassword({
                       onChange={(e) => setResetOtp(e.target.value)}
                       placeholder="123456"
                       maxLength={6}
+                      autoComplete="one-time-code"
+                      name="otp-code"
+                      inputMode="numeric"
                       className="w-full pl-12 pr-4 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-600 focus:bg-white transition-all text-sm font-black tracking-widest"
                     />
                   </div>

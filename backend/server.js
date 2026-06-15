@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { mkdirSync } from 'fs';
 import authRoutes from './routes/auth.js';
 import profileRoutes from './routes/profile.js';
 import transactionRoutes from './routes/transactions.js';
@@ -13,8 +16,15 @@ import emailTemplateRoutes from './routes/emailTemplates.js';
 import { initializeDatabase } from './init-db.js';
 import { runReminderCycle } from './services/reminderService.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 // Load environment variables
 dotenv.config();
+
+// Ensure storage directories exist
+['storage/invoices', 'storage/receipts'].forEach(dir =>
+  mkdirSync(join(__dirname, dir), { recursive: true })
+);
 
 // Initialize MySQL Tables
 initializeDatabase();
@@ -32,6 +42,10 @@ app.use(cors({
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve generated PDFs from storage directory
+app.use('/storage', express.static(join(__dirname, 'storage')));
+
 
 // ─────────────────────────────────────────────
 // Mount API Routes
