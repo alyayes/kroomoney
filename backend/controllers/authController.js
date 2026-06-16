@@ -25,8 +25,8 @@ export const register = async (req, res) => {
 
     const now = new Date();
     const role = email.toLowerCase() === 'admin@kroomoney.com' ? 'admin_sistem' : 'bendahara';
-    // Admin is active by default, Treasurer needs approval
-    const status = role === 'admin_sistem' ? 'aktif' : 'menunggu_persetujuan';
+    // Both Admin and Treasurer are active by default upon registration
+    const status = 'aktif';
 
     const insertId = await UserModel.create({
       nama,
@@ -81,7 +81,7 @@ export const login = async (req, res) => {
     if (!user) {
       return res.status(400).json({
         status: 'error',
-        message: 'Email atau password salah!'
+        message: 'Gagal masuk. Periksa email/password Anda.'
       });
     }
 
@@ -90,7 +90,7 @@ export const login = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({
         status: 'error',
-        message: 'Email atau password salah!'
+        message: 'Gagal masuk. Periksa email/password Anda.'
       });
     }
 

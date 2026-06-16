@@ -192,18 +192,8 @@ export default function App() {
       });
 
       if (res.data) {
-        const { token: userToken, profile: userProfile } = res.data;
-        setToken(userToken);
-        localStorage.setItem("kroombox_user_token", userToken);
-        const updatedProfile = {
-          ...userProfile,
-          role: userProfile.role || (userProfile.email.toLowerCase() === "admin@kroomoney.com" ? "Admin" : "Treasurer")
-        };
-        setProfile(updatedProfile);
-        localStorage.setItem("kroombox_user_profile", JSON.stringify(updatedProfile));
-
-        setNotification({ message: "Pendaftaran berhasil! Selamat datang di KroomBox.", type: "success" });
-        setView("authenticated");
+        setNotification({ message: "Pendaftaran berhasil! Silakan masuk dengan akun Anda.", type: "success" });
+        setView("login");
       }
     } catch (err: any) {
       if (err.message === "offline") {
@@ -214,13 +204,10 @@ export default function App() {
           tandaTangan: "",
           role: detectedRole
         };
-        setProfile(fallbackProfile);
         localStorage.setItem("kroombox_user_profile", JSON.stringify(fallbackProfile));
-        setToken("offline-token-session");
-        localStorage.setItem("kroombox_user_token", "offline-token-session");
         setIsOffline(true);
-        setNotification({ message: `Pendaftaran selesai! Berjalan dalam Sesi Lokal Offline (${detectedRole}).`, type: "success" });
-        setView("authenticated");
+        setNotification({ message: "Pendaftaran selesai secara offline! Silakan login untuk masuk.", type: "success" });
+        setView("login");
       } else {
         setNotification({ message: err.message || "Gagal mendaftar.", type: "error" });
       }
@@ -277,20 +264,40 @@ export default function App() {
           }
         }
 
-        const detectedRole = loginForm.email.toLowerCase() === "admin@kroomoney.com" ? "Admin" : "Treasurer";
-        const fallbackProfile = {
-          nama: detectedRole === "Admin" ? "Admin Kroombox" : "Bendahara Kroombox",
-          email: loginForm.email,
-          tandaTangan: "",
-          role: detectedRole
-        };
-        setProfile(fallbackProfile);
-        localStorage.setItem("kroombox_user_profile", JSON.stringify(fallbackProfile));
-        setToken("offline-token-session");
-        localStorage.setItem("kroombox_user_token", "offline-token-session");
-        setIsOffline(true);
-        setNotification({ message: `Login berhasil (Sesi Lokal Offline Baru: ${detectedRole}).`, type: "success" });
-        setView("authenticated");
+        // Check against permitted offline test/registered accounts
+        const allowedOfflineEmails = ["admin@kroomoney.com", "bendahara@kroomoney.com", "budi.st@domain.com"];
+        const savedTreasurersStr = localStorage.getItem("kroombox_admin_treasurers");
+        if (savedTreasurersStr) {
+          try {
+            const savedTreasurers = JSON.parse(savedTreasurersStr);
+            if (Array.isArray(savedTreasurers)) {
+              savedTreasurers.forEach((t: any) => {
+                if (t.email) allowedOfflineEmails.push(t.email.toLowerCase());
+              });
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        if (allowedOfflineEmails.includes(loginForm.email.toLowerCase())) {
+          const detectedRole = loginForm.email.toLowerCase() === "admin@kroomoney.com" ? "Admin" : "Treasurer";
+          const fallbackProfile = {
+            nama: detectedRole === "Admin" ? "Admin Kroombox" : "Bendahara Kroombox",
+            email: loginForm.email,
+            tandaTangan: "",
+            role: detectedRole
+          };
+          setProfile(fallbackProfile);
+          localStorage.setItem("kroombox_user_profile", JSON.stringify(fallbackProfile));
+          setToken("offline-token-session");
+          localStorage.setItem("kroombox_user_token", "offline-token-session");
+          setIsOffline(true);
+          setNotification({ message: `Login berhasil (Sesi Lokal Offline Baru: ${detectedRole}).`, type: "success" });
+          setView("authenticated");
+        } else {
+          setNotification({ message: "Gagal masuk. Periksa email/password Anda.", type: "error" });
+        }
       } else {
         setNotification({ message: err.message || "Gagal masuk. Periksa email/password Anda.", type: "error" });
       }
@@ -754,6 +761,7 @@ export default function App() {
         setShowRegisterPassword={setShowRegisterPassword}
         hasSubmittedRegister={hasSubmittedRegister}
         setView={navigateTo}
+        notification={notification}
       />
     );
   }
@@ -776,6 +784,7 @@ export default function App() {
         setView={navigateTo}
         apiRequest={apiRequest}
         setNotification={setNotification}
+        notification={notification}
       />
     );
   }

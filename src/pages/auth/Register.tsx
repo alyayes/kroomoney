@@ -8,6 +8,7 @@ import {
   EyeOff,
   Eye,
   AlertCircle,
+  CheckCircle2,
   BarChart3,
   Coins,
   TrendingUp as TrendingIcon,
@@ -34,6 +35,7 @@ interface RegisterProps {
   setShowRegisterPassword: React.Dispatch<React.SetStateAction<boolean>>;
   hasSubmittedRegister: boolean;
   setView: React.Dispatch<React.SetStateAction<"landing" | "login" | "register" | "forgot-password" | "authenticated">>;
+  notification?: { message: string; type: "success" | "error" } | null;
 }
 
 export default function Register({
@@ -44,7 +46,8 @@ export default function Register({
   showRegisterPassword,
   setShowRegisterPassword,
   hasSubmittedRegister,
-  setView
+  setView,
+  notification
 }: RegisterProps) {
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row font-jakarta overflow-hidden w-full">
@@ -293,6 +296,31 @@ export default function Register({
           </div>
         </div>
       </div>
+
+      {/* Notifications */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-[100] border ${
+              notification.type === "success"
+                ? "bg-emerald-50 border-emerald-100 text-emerald-800"
+                : "bg-red-50 border-red-100 text-red-800"
+            }`}
+          >
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${notification.type === "success" ? "bg-emerald-500" : "bg-red-500"}`}>
+              {notification.type === "success" ? (
+                <CheckCircle2 className="w-5 h-5" />
+              ) : (
+                <AlertCircle className="w-5 h-5" />
+              )}
+            </div>
+            <span className="font-bold text-sm">{notification.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
