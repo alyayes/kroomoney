@@ -101,6 +101,59 @@ paths:
         '200':
           description: Customer updated or already synchronized.
 
+  /customers/{external_customer_id}:
+    get:
+      summary: Get Customer by External ID
+      description: Retrieve details of a specific customer using its external customer ID.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: external_customer_id
+          in: path
+          description: The external customer ID.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Customer details.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      external_customer_id:
+                        type: string
+                        example: CUS-998
+                      internal_customer_id:
+                        type: integer
+                        example: 45
+                      customer_code:
+                        type: string
+                        example: EXT-HOSTING-CUS-998
+                      name:
+                        type: string
+                        example: Budi Santoso
+                      email:
+                        type: string
+                        example: budi@domain.com
+                      phone:
+                        type: string
+                        example: "08123456789"
+                      raw_data:
+                        type: object
+                      created_at:
+                        type: string
+                        format: date-time
+        '404':
+          description: Customer not found.
+
   /transactions/sync:
     post:
       summary: Sync Transaction Data
