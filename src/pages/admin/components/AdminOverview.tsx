@@ -1,14 +1,14 @@
-import React from "react";
-import { Users, BarChart3, Activity, Server, Cpu, HardDrive } from "lucide-react";
+import { Users, BarChart3, Activity, Server, Cpu, HardDrive, ChevronDown } from "lucide-react";
 import { motion } from "motion/react";
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip
+  Tooltip,
+  Legend
 } from "recharts";
 
 interface ServerMetrics {
@@ -44,6 +44,8 @@ interface AdminOverviewProps {
   totalTrxVolume: number;
   serverMetrics: ServerMetrics;
   chartData: Array<{ name: string; Pemasukan: number; Pengeluaran: number }>;
+  timeframe: "Harian" | "Mingguan" | "Bulanan";
+  setTimeframe: React.Dispatch<React.SetStateAction<"Harian" | "Mingguan" | "Bulanan">>;
   auditLogs: AuditLog[];
   setActiveMenu: (menu: string) => void;
 }
@@ -54,6 +56,8 @@ export default function AdminOverview({
   totalTrxVolume,
   serverMetrics,
   chartData,
+  timeframe,
+  setTimeframe,
   auditLogs,
   setActiveMenu
 }: AdminOverviewProps) {
@@ -135,28 +139,32 @@ export default function AdminOverview({
         <div className="lg:col-span-12 bg-white p-6 rounded-2xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(58,123,213,0.06)] min-h-[380px] flex flex-col">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h4 className="text-lg font-black text-[#1E2D50] tracking-tight">Grafik Konsolidasi Sistem</h4>
-              <p className="text-xs text-[#5A6A85] font-semibold uppercase tracking-wider mt-0.5">Seluruh Aktivitas Keuangan Bendahara</p>
+              <h4 className="text-lg font-black text-[#1E2D50] tracking-tight">Grafik Aktivitas Keuangan</h4>
+              <p className="text-xs text-[#5A6A85] font-semibold uppercase tracking-wider mt-0.5">Ringkasan Pemasukan dan Pengeluaran Bendahara ({timeframe})</p>
+            </div>
+            <div className="relative group">
+              <select
+                value={timeframe}
+                onChange={(e) => setTimeframe(e.target.value as any)}
+                className="appearance-none pl-6 pr-12 py-3 bg-[#EAF4FF]/40 border border-[#DBEEFF] rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#2563EB] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all cursor-pointer"
+              >
+                <option value="Harian">Harian</option>
+                <option value="Mingguan">Mingguan</option>
+                <option value="Bulanan">Bulanan</option>
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#2563EB]">
+                <ChevronDown className="w-4 h-4" />
+              </div>
             </div>
           </div>
 
           <div className="flex-1 w-full min-h-[260px]">
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="adminIncome" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563EB" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#2563EB" stopOpacity={0.0} />
-                    </linearGradient>
-                    <linearGradient id="adminExpense" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAF4FF" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#5A6A85", fontSize: 10, fontWeight: 700 }} />
-                  <YAxis hide />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#5A6A85", fontSize: 10, fontWeight: 700 }} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
@@ -164,8 +172,8 @@ export default function AdminOverview({
                           <div className="bg-[#1E2D50] text-white p-4 rounded-xl border border-[#DBEEFF]/20 shadow-2xl">
                             <p className="text-[10px] font-black tracking-widest uppercase text-slate-300 mb-2">{payload[0].payload.name}</p>
                             <div className="space-y-1">
-                              <p className="text-xs font-bold text-blue-200">Income: Rp {payload[0].value?.toLocaleString("id-ID")}</p>
-                              <p className="text-xs font-bold text-red-200">Expense: Rp {payload[1].value?.toLocaleString("id-ID")}</p>
+                              <p className="text-xs font-bold text-blue-200">Pemasukan: Rp {payload[0].value?.toLocaleString("id-ID")}</p>
+                              <p className="text-xs font-bold text-red-200">Pengeluaran: Rp {payload[1].value?.toLocaleString("id-ID")}</p>
                             </div>
                           </div>
                         );
@@ -173,9 +181,10 @@ export default function AdminOverview({
                       return null;
                     }}
                   />
-                  <Area type="monotone" dataKey="Pemasukan" stroke="#2563EB" strokeWidth={3} fillOpacity={1} fill="url(#adminIncome)" />
-                  <Area type="monotone" dataKey="Pengeluaran" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#adminExpense)" />
-                </AreaChart>
+                  <Legend verticalAlign="top" height={36} iconType="circle" />
+                  <Bar dataKey="Pemasukan" fill="#2563EB" radius={[4, 4, 0, 0]} name="Pemasukan (Debit)" />
+                  <Bar dataKey="Pengeluaran" fill="#EF4444" radius={[4, 4, 0, 0]} name="Pengeluaran (Kredit)" />
+                </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-[#5A6A85]/40 text-xs font-black uppercase tracking-wider">

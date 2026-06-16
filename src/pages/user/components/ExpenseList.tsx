@@ -59,7 +59,7 @@ export default function ExpenseList({
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden w-full">
         <div className="overflow-x-auto w-full">
-          <table className="w-full border-collapse text-left min-w-[900px]">
+          <table className="w-full border-collapse text-left min-w-[1100px]">
             <thead>
               <tr className="bg-slate-550/10 bg-slate-50/50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-widest select-none">
                 <th className="py-5 px-6">ID Trx</th>
@@ -89,21 +89,23 @@ export default function ExpenseList({
                         {t.statusPembayaran}
                       </span>
                     </td>
-                    <td className="py-5 px-6 text-right space-x-2">
+                    <td className="py-5 px-6 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end gap-1">
                       <button
                         onClick={() => handleEdit(t)}
-                        className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg border-none active:scale-95 transition-all cursor-pointer"
+                        className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg border-none active:scale-95 transition-all cursor-pointer inline-flex items-center"
                         title="Edit Transaksi"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(t.id)}
-                        className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg border-none active:scale-95 transition-all cursor-pointer"
+                        className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg border-none active:scale-95 transition-all cursor-pointer inline-flex items-center"
                         title="Hapus Transaksi"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      </div>
                     </td>
                   </tr>
                 ))

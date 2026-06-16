@@ -1,6 +1,5 @@
 import InvoiceModel from '../../../models/invoiceModel.js';
 import TransactionModel from '../../../models/transactionModel.js';
-import ExtTransactionModel from '../../../models/extTransactionModel.js';
 import { generateInvoicePdf } from '../../../services/pdfService.js';
 import { sendEmail } from '../../../services/emailService.js';
 import { onInvoiceGenerated } from '../../../services/callbackService.js';
@@ -25,8 +24,8 @@ class InvoiceApiController {
     }
 
     try {
-      const extTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
-      if (!extTrx) {
+      const trx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
+      if (!trx) {
         return res.status(404).json({
           status: 'error',
           code: 'TRANSACTION_NOT_FOUND',
@@ -34,10 +33,7 @@ class InvoiceApiController {
         });
       }
 
-      const internalId = extTrx.internal_transaction_id;
-      const trx = await TransactionModel.findById(internalId);
-
-      const existing = await InvoiceModel.findByTransaksiId(internalId);
+      const existing = await InvoiceModel.findByTransaksiId(trx.id);
       if (existing) {
         return res.status(409).json({
           status: 'error',
@@ -50,14 +46,14 @@ class InvoiceApiController {
         });
       }
 
-      const subtotal = extTrx.amount * extTrx.quantity;
+      const subtotal = trx.nominal_transfer * trx.kuantitas;
       const total = Math.max(0, subtotal - Number(discount));
       const today = new Date().toISOString().split('T')[0];
 
       // Create invoice in database
       const createdBy = req.user?.id || 1; // Default to admin ID 1 if system/api key trigger
       const { insertId, nomor_invoice } = await InvoiceModel.create({
-        transaksi_id: internalId,
+        transaksi_id: trx.id,
         pelanggan_id: trx.pelanggan_id,
         nama_manual: trx.nama_manual,
         no_wa_manual: trx.no_whatsapp_manual,
@@ -73,10 +69,10 @@ class InvoiceApiController {
 
       // Insert default item
       await InvoiceModel.createItems(insertId, [{
-        deskripsi: extTrx.service_name,
-        sub_deskripsi: extTrx.description || null,
-        kuantitas: extTrx.quantity,
-        harga_satuan: extTrx.amount,
+        deskripsi: trx.service_name,
+        sub_deskripsi: trx.notes || null,
+        kuantitas: trx.kuantitas,
+        harga_satuan: trx.nominal_transfer,
         diskon_persen: 0,
         subtotal
       }]);
@@ -92,11 +88,8 @@ class InvoiceApiController {
         console.error('PDF Generation warning (non-fatal):', pdfErr.message);
       }
 
-      // Update ext_transactions status to invoice_sent
-      await ExtTransactionModel.updateStatus(extTrx.id, 'invoice_sent');
-
       // Trigger callback
-      await onInvoiceGenerated(extTrx.id, nomor_invoice, total, due_date);
+      await onInvoiceGenerated(trx.id, nomor_invoice, total, due_date);
 
       return res.status(201).json({
         status: 'success',
@@ -124,8 +117,8 @@ class InvoiceApiController {
     const clientId = req.apiClient.id;
 
     try {
-      const extTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
-      if (!extTrx) {
+      const trx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
+      if (!trx) {
         return res.status(404).json({
           status: 'error',
           code: 'TRANSACTION_NOT_FOUND',
@@ -133,7 +126,7 @@ class InvoiceApiController {
         });
       }
 
-      const inv = await InvoiceModel.findByTransaksiId(extTrx.internal_transaction_id);
+      const inv = await InvoiceModel.findByTransaksiId(trx.id);
       if (!inv) {
         return res.status(404).json({
           status: 'error',
@@ -174,8 +167,8 @@ class InvoiceApiController {
     }
 
     try {
-      const extTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
-      if (!extTrx) {
+      const trx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
+      if (!trx) {
         return res.status(404).json({
           status: 'error',
           code: 'TRANSACTION_NOT_FOUND',
@@ -183,7 +176,7 @@ class InvoiceApiController {
         });
       }
 
-      const inv = await InvoiceModel.findByTransaksiId(extTrx.internal_transaction_id);
+      const inv = await InvoiceModel.findByTransaksiId(trx.id);
       if (!inv) {
         return res.status(404).json({
           status: 'error',

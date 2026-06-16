@@ -1,4 +1,3 @@
-import React from "react";
 import {
   LayoutDashboard,
   Users,
@@ -42,10 +41,8 @@ export default function SidebarAdmin({
         {/* Header & App Branding */}
         <div className="h-20 flex items-center px-6 gap-3 border-b border-slate-50 justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-1.5 shadow-sm">
-              <div className="bg-blue-900 w-full h-full rounded-md flex items-center justify-center">
-                <ShieldCheck className="w-4 h-4 text-white" />
-              </div>
+            <div className="w-10 h-10 flex items-center justify-center">
+              <img src="/logo.png" alt="Kroomoney Logo" className="w-full h-full object-contain drop-shadow-sm mix-blend-multiply" />
             </div>
             <div>
               <span className="text-xl font-bold tracking-tight text-blue-900">{appName}</span>

@@ -38,10 +38,10 @@ class UserModel {
     );
   }
 
-  // Get all users with role 'bendahara'
+  // Get all users from the system
   static async findAllTreasurers() {
     const [rows] = await pool.query(
-      "SELECT id, nama_lengkap, email, role, status_akun, created_at FROM users WHERE role = 'bendahara' ORDER BY created_at DESC"
+      "SELECT id, nama_lengkap, email, role, status_akun, created_at FROM users ORDER BY created_at DESC"
     );
     return rows;
   }

@@ -263,7 +263,7 @@ export const resetPassword = async (req, res) => {
 // --- ADMIN CONTROL FOR TREASURERS ---
 export const getAllTreasurers = async (req, res) => {
   try {
-    // Return all bendahara users
+    // Return all users from the system
     const rows = await UserModel.findAllTreasurers();
     
     const mapped = rows.map(u => ({
@@ -271,10 +271,11 @@ export const getAllTreasurers = async (req, res) => {
       rawId: u.id,
       nama: u.nama_lengkap,
       email: u.email,
+      role: u.role === 'admin_sistem' ? 'Admin' : 'Bendahara',
       status: u.status_akun === 'aktif' ? 'Active' : u.status_akun === 'menunggu_persetujuan' ? 'Pending' : 'Inactive',
       rawStatus: u.status_akun,
-      startup: 'Kroombox Corp', // Placeholder affiliation
-      lastActive: 'Active recently'
+      startup: 'Kroombox Corp',
+      lastActive: u.created_at ? new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'
     }));
 
     return res.status(200).json({
@@ -283,7 +284,7 @@ export const getAllTreasurers = async (req, res) => {
     });
   } catch (err) {
     console.error('Get treasurers error:', err);
-    return res.status(500).json({ status: 'error', message: 'Gagal memuat daftar bendahara.' });
+    return res.status(500).json({ status: 'error', message: 'Gagal memuat daftar pengguna.' });
   }
 };
 

@@ -140,19 +140,21 @@ export default function KwitansiPanel({ formatRupiah }: KwitansiPanelProps) {
                     <td className="py-5 px-6 text-slate-900">{r.namaPelanggan}</td>
                     <td className="py-5 px-6 text-emerald-600">{formatRupiah(r.nominalDiterima)}</td>
                     <td className="py-5 px-6 text-slate-500">{r.metodePembayaran}</td>
-                    <td className="py-5 px-6 text-right space-x-2">
-                      <button onClick={() => handlePreview(r.id)} className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg" title="Preview HTML">
+                    <td className="py-5 px-6 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end gap-1">
+                      <button onClick={() => handlePreview(r.id)} className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg inline-flex items-center" title="Preview HTML">
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDownloadPdf(r.id)} className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg" title="Download PDF">
+                      <button onClick={() => handleDownloadPdf(r.id)} className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg inline-flex items-center" title="Download PDF">
                         <FileText className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleSendWa(r.id)} className="p-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg" title="Kirim WA">
+                      <button onClick={() => handleSendWa(r.id)} className="p-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg inline-flex items-center" title="Kirim WA">
                         <Send className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleSendEmail(r.id)} className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg" title="Kirim Email">
+                      <button onClick={() => handleSendEmail(r.id)} className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg inline-flex items-center" title="Kirim Email">
                         <span className="font-bold">@</span>
                       </button>
+                      </div>
                     </td>
                   </tr>
                 ))

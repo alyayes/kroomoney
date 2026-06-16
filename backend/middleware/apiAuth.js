@@ -8,7 +8,7 @@
 
 import jwt from 'jsonwebtoken';
 import ApiClientModel from '../models/apiClientModel.js';
-import ApiTokenModel from '../models/apiTokenModel.js';
+import ApiLogModel from '../models/apiLogModel.js';
 import { pool } from '../config/db.js';
 
 const API_JWT_SECRET = process.env.API_JWT_SECRET || process.env.JWT_SECRET || 'kroombox_api_secret_2026';
@@ -34,16 +34,6 @@ export const verifyApiToken = async (req, res, next) => {
     // Verify JWT
     const decoded = jwt.verify(token, API_JWT_SECRET);
 
-    // Check token belum di-revoke
-    const tokenRecord = await ApiTokenModel.findByToken(token);
-    if (!tokenRecord) {
-      return res.status(401).json({
-        status: 'error',
-        code: 'TOKEN_INVALID',
-        message: 'Token tidak valid atau sudah expired/revoked.'
-      });
-    }
-
     // Get client data
     const client = await ApiClientModel.findById(decoded.client_id);
     if (!client || !client.is_active) {
@@ -51,6 +41,15 @@ export const verifyApiToken = async (req, res, next) => {
         status: 'error',
         code: 'CLIENT_INACTIVE',
         message: 'API client tidak aktif atau tidak ditemukan.'
+      });
+    }
+
+    // Check token belum di-revoke
+    if (client.token_revoked_at && new Date(decoded.iat * 1000) < new Date(client.token_revoked_at)) {
+      return res.status(401).json({
+        status: 'error',
+        code: 'TOKEN_INVALID',
+        message: 'Token tidak valid atau sudah expired/revoked.'
       });
     }
 
@@ -69,7 +68,6 @@ export const verifyApiToken = async (req, res, next) => {
     }
 
     req.apiClient = client;
-    req.apiTokenId = tokenRecord.id;
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
@@ -137,20 +135,17 @@ export const logApiRequest = async (req, res, next) => {
   res.send = function (body) {
     const duration = Date.now() - startTime;
     // Fire-and-forget logging
-    pool.query(
-      `INSERT INTO api_request_log (client_id, method, endpoint, request_body, response_status, ip_address, user_agent, duration_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        req.apiClient?.id || null,
-        req.method,
-        req.originalUrl,
-        req.method !== 'GET' ? JSON.stringify(req.body).substring(0, 2000) : null,
-        res.statusCode,
-        req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
-        (req.headers['user-agent'] || '').substring(0, 500),
-        duration
-      ]
-    ).catch(() => {}); // silently ignore log errors
+    ApiLogModel.createRequestLog({
+      client_id: req.apiClient?.id || null,
+      method: req.method,
+      endpoint: req.originalUrl,
+      request_body: req.method !== 'GET' ? JSON.stringify(req.body).substring(0, 2000) : null,
+      response_status: res.statusCode,
+      response_body: null, // Optional
+      ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1',
+      user_agent: (req.headers['user-agent'] || '').substring(0, 500),
+      duration_ms: duration
+    }).catch(err => console.error('Error logging API request:', err));
     return originalSend.call(this, body);
   };
 

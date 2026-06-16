@@ -82,6 +82,14 @@ class ApiClientModel {
     return { api_key, api_secret };
   }
 
+  // Revoke all tokens for a client
+  static async revokeTokens(id) {
+    await pool.query(
+      'UPDATE api_clients SET token_revoked_at = NOW() WHERE id = ?',
+      [id]
+    );
+  }
+
   // Validate HMAC signature
   static validateSignature(body, secret, signature) {
     const expected = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');

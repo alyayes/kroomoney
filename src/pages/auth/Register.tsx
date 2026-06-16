@@ -56,10 +56,8 @@ export default function Register({
       >
         {/* Logo Section */}
         <div className="flex items-center gap-2.5 mb-10 shrink-0">
-          <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/10">
-            <Wallet className="w-6 h-6 text-emerald-400" />
-          </div>
-          <span className="text-2xl font-black tracking-tighter text-slate-900 leading-none">KroomBox</span>
+          <img src="/logo.png" alt="Kroomoney Logo" className="w-10 h-auto object-contain drop-shadow-sm mix-blend-multiply" />
+          <span className="text-2xl font-black tracking-tighter text-slate-900 leading-none">KROOMONEY</span>
         </div>
 
         {/* Form Container */}
@@ -226,11 +224,9 @@ export default function Register({
             <motion.div
               animate={{ y: [0, -12, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              className="z-20 w-32 h-32 bg-white rounded-[40px] flex items-center justify-center shadow-2xl shadow-blue-900/10 border border-white"
+              className="z-20 w-32 h-32 bg-white rounded-[40px] flex items-center justify-center shadow-2xl shadow-blue-900/10 border border-white p-2"
             >
-              <div className="w-20 h-20 bg-blue-600 rounded-[30px] flex items-center justify-center shadow-xl shadow-blue-200">
-                <Wallet className="w-10 h-10 text-white" />
-              </div>
+              <img src="/logo.png" alt="Kroomoney Logo" className="w-full h-full object-contain mix-blend-multiply" />
             </motion.div>
 
             {/* Orbiting Interaction Icons */}

@@ -3,7 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { mkdirSync } from 'fs';
+import { mkdirSync, readFileSync } from 'fs';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yaml';
 import authRoutes from './routes/auth.js';
 import profileRoutes from './routes/profile.js';
 import transactionRoutes from './routes/transactions.js';
@@ -12,7 +14,6 @@ import settingsRoutes from './routes/settings.js';
 import invoiceRoutes from './routes/invoices.js';
 import receiptRoutes from './routes/receipts.js';
 import reminderRoutes from './routes/reminders.js';
-import emailTemplateRoutes from './routes/emailTemplates.js';
 import apiV1Routes from './routes/api-v1.js';
 import apiClientsRoutes from './routes/apiClients.js';
 import { initializeDatabase } from './init-db.js';
@@ -50,6 +51,13 @@ app.use('/storage', express.static(join(__dirname, 'storage')));
 
 
 // ─────────────────────────────────────────────
+// Swagger API Documentation (Updated)
+// ─────────────────────────────────────────────
+const swaggerFile = readFileSync(join(__dirname, 'docs', 'openapi.yaml'), 'utf8');
+const swaggerDocument = YAML.parse(swaggerFile);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// ─────────────────────────────────────────────
 // Mount API Routes
 // ─────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
@@ -60,7 +68,6 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/reminders', reminderRoutes);
-app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/v1', apiV1Routes);
 app.use('/api/api-clients', apiClientsRoutes);
 
@@ -77,7 +84,6 @@ app.get('/api/health', (req, res) => {
       invoices: '/api/invoices',
       receipts: '/api/receipts',
       reminders: '/api/reminders',
-      email_templates: '/api/email-templates',
       customers: '/api/customers',
       settings: '/api/settings',
     }
@@ -114,7 +120,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`==================================================`);
   console.log(`🚀 KroomBox API Server v3.0 running on port ${PORT}`);
   console.log(`🔗 API Base: http://localhost:${PORT}/api`);
-  console.log(`📋 Endpoints: /api/invoices | /api/receipts | /api/reminders | /api/email-templates`);
+  console.log(`📋 Endpoints: /api/invoices | /api/receipts | /api/reminders`);
   console.log(`==================================================`);
 
   // Start reminder scheduler after 30s delay (wait for DB init)

@@ -14,8 +14,10 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.22.3",
+    "mysql2": "^3.22.5",
     "nodemailer": "^8.0.7",
-    "puppeteer": "^25.1.0"
+    "puppeteer": "^25.1.0",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.9.0"
   }
 }

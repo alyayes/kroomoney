@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 export async function initializeDatabase() {
   try {
-    const sqlPath = path.join(__dirname, 'database.sql');
+    const sqlPath = path.join(__dirname, 'database-v7.sql');
     const sqlContent = fs.readFileSync(sqlPath, 'utf8');
     
     // Strip SQL comments line by line
@@ -49,18 +49,20 @@ export async function initializeDatabase() {
       console.log('✅ Default Super Admin account seeded successfully (admin@kroomoney.com / admin123).');
     }
 
-    // Seed default settings if not exists
+    // Seed default settings in new settings table if not exists
     const defaultSettings = [
-      { key: 'gemini_api_key', val: process.env.GEMINI_API_KEY || '', model: 'gemini-1.5-flash', temp: 0.2 },
-      { key: 'whatsapp_token', val: 'whatsapp_mock_token_session_2026', model: null, temp: 0.0 }
+      { key: 'gemini_api_key', val: process.env.GEMINI_API_KEY || '', group: 'gemini', desc: 'Gemini API Key' },
+      { key: 'gemini_model_version', val: 'gemini-1.5-flash', group: 'gemini', desc: 'Gemini model version setting' },
+      { key: 'gemini_temperature', val: '0.2', group: 'gemini', desc: 'Gemini temperature setting' },
+      { key: 'whatsapp_token', val: 'whatsapp_mock_token_session_2026', group: 'whatsapp', desc: 'WhatsApp token' }
     ];
 
     for (const setting of defaultSettings) {
-      const [existingSetting] = await pool.query('SELECT * FROM global_settings WHERE setting_key = ?', [setting.key]);
+      const [existingSetting] = await pool.query('SELECT * FROM settings WHERE setting_key = ?', [setting.key]);
       if (existingSetting.length === 0) {
         await pool.query(
-          'INSERT INTO global_settings (setting_key, setting_value, gemini_model_version, gemini_temperature) VALUES (?, ?, ?, ?)',
-          [setting.key, setting.val, setting.model, setting.temp]
+          'INSERT INTO settings (setting_key, setting_value, setting_group, description) VALUES (?, ?, ?, ?)',
+          [setting.key, setting.val, setting.group, setting.desc]
         );
         console.log(`⚙️ Default setting seeded: ${setting.key}`);
       }

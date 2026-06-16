@@ -65,7 +65,7 @@ export default function IncomeList({
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden w-full">
         <div className="overflow-x-auto w-full">
-          <table className="w-full border-collapse text-left min-w-[900px]">
+          <table className="w-full border-collapse text-left min-w-[1100px]">
             <thead>
               <tr className="bg-slate-550/10 bg-slate-50/50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-widest select-none">
                 <th className="py-5 px-6">ID Trx</th>
@@ -112,7 +112,8 @@ export default function IncomeList({
                         }
                       </span>
                     </td>
-                    <td className="py-5 px-6 text-right space-x-1">
+                    <td className="py-5 px-6 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end gap-1">
                       {/* Invoice - selalu ada */}
                       <button
                         onClick={() => { setSelectedReceipt(t); setSelectedDocType("Invoice"); }}
@@ -154,6 +155,7 @@ export default function IncomeList({
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      </div>
                     </td>
 
                   </tr>

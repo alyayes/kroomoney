@@ -1,5 +1,4 @@
 import TransactionModel from '../../../models/transactionModel.js';
-import ExtTransactionModel from '../../../models/extTransactionModel.js';
 import { onTransactionVerified, onTransactionCancelled } from '../../../services/callbackService.js';
 
 class PaymentApiController {
@@ -16,8 +15,8 @@ class PaymentApiController {
     }
 
     try {
-      const extTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
-      if (!extTrx) {
+      const trx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
+      if (!trx) {
         return res.status(404).json({
           status: 'error',
           code: 'TRANSACTION_NOT_FOUND',
@@ -25,18 +24,7 @@ class PaymentApiController {
         });
       }
 
-      const internalId = extTrx.internal_transaction_id;
-      const internalTrx = await TransactionModel.findById(internalId);
-
-      if (!internalTrx) {
-        return res.status(404).json({
-          status: 'error',
-          code: 'TRANSACTION_NOT_FOUND',
-          message: 'Transaksi internal tidak ditemukan.'
-        });
-      }
-
-      if (internalTrx.status_konfirmasi === 'lunas') {
+      if (trx.status_konfirmasi === 'lunas') {
         return res.status(400).json({
           status: 'error',
           code: 'ALREADY_PAID',
@@ -47,19 +35,18 @@ class PaymentApiController {
       // Approve transaction
       // req.user.id is available from JWT verify (for internal users/admin)
       // or we can use a system placeholder if authenticated via API key
-      const confirmedBy = req.user?.id || req.apiClient.id;
-      await TransactionModel.approve(internalId, confirmedBy);
-      await ExtTransactionModel.updateStatus(extTrx.id, 'verified');
+      const confirmedBy = req.user?.id || null;
+      await TransactionModel.approve(trx.id, confirmedBy);
 
       const verifiedBy = req.user?.nama_lengkap || req.apiClient.client_name || 'API Client';
-      await onTransactionVerified(extTrx.id, verifiedBy);
+      await onTransactionVerified(trx.id, verifiedBy);
 
       return res.status(200).json({
         status: 'success',
         message: 'Pembayaran berhasil disetujui (verified).',
         data: {
           external_transaction_id,
-          internal_transaction_id: internalId,
+          internal_transaction_id: trx.id,
           status: 'verified'
         }
       });
@@ -86,8 +73,8 @@ class PaymentApiController {
     }
 
     try {
-      const extTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
-      if (!extTrx) {
+      const trx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
+      if (!trx) {
         return res.status(404).json({
           status: 'error',
           code: 'TRANSACTION_NOT_FOUND',
@@ -95,24 +82,34 @@ class PaymentApiController {
         });
       }
 
-      const internalId = extTrx.internal_transaction_id;
-
-      // Set status in transaksi
-      await TransactionModel.update(internalId, {
-        status_konfirmasi: 'belum_lunas', // or create a rejected status, using existing enum values
-        status_dokumen: 'Draft',
-        notes: `Ditolak via API: ${reason || 'Tidak ada alasan.'}`
+      // Set status in transactions
+      await TransactionModel.update(trx.id, {
+        pelanggan_id: trx.pelanggan_id,
+        nama_manual: trx.nama_manual,
+        no_whatsapp_manual: trx.no_whatsapp_manual,
+        nominal_transfer: trx.nominal_transfer,
+        kuantitas: trx.kuantitas,
+        tanggal_bayar: trx.tanggal_bayar,
+        status_konfirmasi: 'belum_lunas',
+        status_dokumen: 'draft',
+        sertakan_tanda_tangan: trx.sertakan_tanda_tangan,
+        tipe_transaksi: trx.tipe_transaksi,
+        notes: `Ditolak via API: ${reason || 'Tidak ada alasan.'}`,
+        dikonfirmasi_oleh: null,
+        source_type: trx.source_type,
+        ext_transaction_id: trx.external_transaction_id,
+        api_client_id: trx.api_client_id,
+        service_name: trx.service_name
       });
 
-      await ExtTransactionModel.updateStatus(extTrx.id, 'cancelled');
-      await onTransactionCancelled(extTrx.id, reason || 'Ditolak via API');
+      await onTransactionCancelled(trx.id, reason || 'Ditolak via API');
 
       return res.status(200).json({
         status: 'success',
         message: 'Transaksi berhasil ditolak (rejected).',
         data: {
           external_transaction_id,
-          internal_transaction_id: internalId,
+          internal_transaction_id: trx.id,
           status: 'cancelled'
         }
       });
@@ -128,3 +125,4 @@ class PaymentApiController {
 }
 
 export default PaymentApiController;
+

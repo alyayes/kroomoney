@@ -479,34 +479,260 @@ export function useUserDashboard({
     }
   };
 
+  // Helper: parse local date string "YYYY-MM-DD" to Date object safely
+  const parseLocalDate = (dateStr: string) => {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // --- Statistics ---
   const [timeframe, setTimeframe] = useState<"Harian" | "Mingguan" | "Bulanan">("Mingguan");
-  const dailyData = [
-    { name: 'Mon', Debit: 2100000, Kredit: 1200000, trend: 1500000 },
-    { name: 'Tue', Debit: 1800000, Kredit: 1500000, trend: 1600000 },
-    { name: 'Wed', Debit: 2900000, Kredit: 1100000, trend: 1800000 },
-    { name: 'Thu', Debit: 1500000, Kredit: 1900000, trend: 1700000 },
-    { name: 'Fri', Debit: 4200000, Kredit: 2200000, trend: 2500000 },
-    { name: 'Sat', Debit: 3200000, Kredit: 1400000, trend: 2000000 },
-    { name: 'Sun', Debit: 3800000, Kredit: 1800000, trend: 2200000 },
-  ];
 
-  const weeklyData = [
-    { name: 'W1', Debit: 12500000, Kredit: 8400000, trend: 10000000 },
-    { name: 'W2', Debit: 15800000, Kredit: 9200000, trend: 12000000 },
-    { name: 'W3', Debit: 11200000, Kredit: 10500000, trend: 11000000 },
-    { name: 'W4', Debit: 18400000, Kredit: 12000000, trend: 14000000 },
-  ];
+  const dailyData = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    const name = d.toLocaleDateString("id-ID", { weekday: "short" });
 
-  const monthlyData = [
-    { name: 'Jan', Debit: 45000000, Kredit: 32000000, trend: 38000000 },
-    { name: 'Feb', Debit: 52000000, Kredit: 28000000, trend: 40000000 },
-    { name: 'Mar', Debit: 48000000, Kredit: 35000000, trend: 42000000 },
-    { name: 'Apr', Debit: 61000000, Kredit: 41000000, trend: 50000000 },
-    { name: 'May', Debit: 45820000, Kredit: 28340000, trend: 42000000 },
-  ];
+    const debit = transactions
+      .filter(t => t.tanggal === dateStr && t.tipe === "Debit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    const kredit = transactions
+      .filter(t => t.tanggal === dateStr && t.tipe === "Kredit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+    return {
+      name,
+      Debit: debit,
+      Kredit: kredit,
+      trend: debit - kredit
+    };
+  });
+
+  const weeklyData = Array.from({ length: 4 }).map((_, i) => {
+    const end = new Date();
+    end.setDate(end.getDate() - (3 - i) * 7);
+    const start = new Date();
+    start.setDate(start.getDate() - (3 - i) * 7 - 6);
+    
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const inRangeTrx = transactions.filter(t => {
+      const tDate = parseLocalDate(t.tanggal);
+      return tDate >= start && tDate <= end;
+    });
+
+    const debit = inRangeTrx
+      .filter(t => t.tipe === "Debit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    const kredit = inRangeTrx
+      .filter(t => t.tipe === "Kredit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+    return {
+      name: `W${i + 1}`,
+      Debit: debit,
+      Kredit: kredit,
+      trend: debit - kredit
+    };
+  });
+
+  const monthlyData = Array.from({ length: 5 }).map((_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (4 - i));
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const name = d.toLocaleDateString("id-ID", { month: "short" });
+
+    const inRangeTrx = transactions.filter(t => {
+      const tDate = parseLocalDate(t.tanggal);
+      return tDate.getFullYear() === year && tDate.getMonth() === month;
+    });
+
+    const debit = inRangeTrx
+      .filter(t => t.tipe === "Debit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    const kredit = inRangeTrx
+      .filter(t => t.tipe === "Kredit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+    return {
+      name,
+      Debit: debit,
+      Kredit: kredit,
+      trend: debit - kredit
+    };
+  });
 
   const activeData = timeframe === "Harian" ? dailyData : timeframe === "Mingguan" ? weeklyData : monthlyData;
+
+  // --- Monthly comparison calculations for KPI Cards ---
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const prevMonthDate = new Date();
+  prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+  const prevYear = prevMonthDate.getFullYear();
+  const prevMonth = prevMonthDate.getMonth();
+
+  const debitCurrentMonth = transactions
+    .filter(t => {
+      const tDate = parseLocalDate(t.tanggal);
+      return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth && t.tipe === "Debit";
+    })
+    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+  const debitPrevMonth = transactions
+    .filter(t => {
+      const tDate = parseLocalDate(t.tanggal);
+      return tDate.getFullYear() === prevYear && tDate.getMonth() === prevMonth && t.tipe === "Debit";
+    })
+    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+  const kreditCurrentMonth = transactions
+    .filter(t => {
+      const tDate = parseLocalDate(t.tanggal);
+      return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth && t.tipe === "Kredit";
+    })
+    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+  const kreditPrevMonth = transactions
+    .filter(t => {
+      const tDate = parseLocalDate(t.tanggal);
+      return tDate.getFullYear() === prevYear && tDate.getMonth() === prevMonth && t.tipe === "Kredit";
+    })
+    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+  const debitChangePct = debitPrevMonth === 0 
+    ? (debitCurrentMonth > 0 ? 100 : 0) 
+    : Math.round(((debitCurrentMonth - debitPrevMonth) / debitPrevMonth) * 100);
+
+  const kreditChangePct = kreditPrevMonth === 0 
+    ? (kreditCurrentMonth > 0 ? 100 : 0) 
+    : Math.round(((kreditCurrentMonth - kreditPrevMonth) / kreditPrevMonth) * 100);
+
+  const debitDiffAmount = debitCurrentMonth - debitPrevMonth;
+  const kreditDiffAmount = kreditCurrentMonth - kreditPrevMonth;
+
+  // --- Dynamic Distribution & Budget status ---
+  const expensesList = transactions.filter(t => t.tipe === "Kredit");
+  let totalKreditAmount = 0;
+  let operasionalAmount = 0;
+  let layananHostingAmount = 0;
+  let lainLainAmount = 0;
+
+  expensesList.forEach(t => {
+    const amt = t.jumlah * t.kuantitas;
+    totalKreditAmount += amt;
+    const desc = (t.namaPembeli + " " + (t.notes || "")).toLowerCase();
+    
+    // Check if Layanan & Hosting
+    if (
+      desc.includes("hosting") || 
+      desc.includes("domain") || 
+      desc.includes("server") || 
+      desc.includes("cloud") || 
+      desc.includes("api") || 
+      desc.includes("email") || 
+      desc.includes("layanan") || 
+      desc.includes("subscription") || 
+      desc.includes("sewa") || 
+      desc.includes("vps") || 
+      desc.includes("database")
+    ) {
+      layananHostingAmount += amt;
+    } else if (
+      desc.includes("operasional") || 
+      desc.includes("listrik") || 
+      desc.includes("air") || 
+      desc.includes("gaji") || 
+      desc.includes("kantor") || 
+      desc.includes("atk") || 
+      desc.includes("makan") || 
+      desc.includes("transport") || 
+      desc.includes("internet") || 
+      desc.includes("wifi") || 
+      desc.includes("kertas") ||
+      desc.includes("biaya")
+    ) {
+      operasionalAmount += amt;
+    } else {
+      lainLainAmount += amt;
+    }
+  });
+
+  const pctOperasional = totalKreditAmount === 0 ? 0 : Math.round((operasionalAmount / totalKreditAmount) * 100);
+  const pctLayananHosting = totalKreditAmount === 0 ? 0 : Math.round((layananHostingAmount / totalKreditAmount) * 100);
+  const pctLainLain = totalKreditAmount === 0 ? 0 : Math.max(0, 100 - pctOperasional - pctLayananHosting);
+
+  // Spent in current month for budget Status
+  const operasionalSpentThisMonth = transactions
+    .filter(t => {
+      if (t.tipe !== "Kredit") return false;
+      const tDate = parseLocalDate(t.tanggal);
+      if (tDate.getFullYear() !== currentYear || tDate.getMonth() !== currentMonth) return false;
+      const desc = (t.namaPembeli + " " + (t.notes || "")).toLowerCase();
+      return (
+        desc.includes("operasional") || 
+        desc.includes("listrik") || 
+        desc.includes("air") || 
+        desc.includes("gaji") || 
+        desc.includes("kantor") || 
+        desc.includes("atk") || 
+        desc.includes("makan") || 
+        desc.includes("transport") || 
+        desc.includes("internet") || 
+        desc.includes("wifi") || 
+        desc.includes("kertas") ||
+        desc.includes("biaya")
+      ) && !(
+        desc.includes("hosting") || 
+        desc.includes("domain") || 
+        desc.includes("server") || 
+        desc.includes("cloud") || 
+        desc.includes("api") || 
+        desc.includes("email") || 
+        desc.includes("layanan") || 
+        desc.includes("subscription") || 
+        desc.includes("sewa") || 
+        desc.includes("vps") || 
+        desc.includes("database")
+      );
+    })
+    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+  const serverSpentThisMonth = transactions
+    .filter(t => {
+      if (t.tipe !== "Kredit") return false;
+      const tDate = parseLocalDate(t.tanggal);
+      if (tDate.getFullYear() !== currentYear || tDate.getMonth() !== currentMonth) return false;
+      const desc = (t.namaPembeli + " " + (t.notes || "")).toLowerCase();
+      return (
+        desc.includes("hosting") || 
+        desc.includes("domain") || 
+        desc.includes("server") || 
+        desc.includes("cloud") || 
+        desc.includes("api") || 
+        desc.includes("email") || 
+        desc.includes("layanan") || 
+        desc.includes("subscription") || 
+        desc.includes("sewa") || 
+        desc.includes("vps") || 
+        desc.includes("database")
+      );
+    })
+    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+  const limitOperasional = 20000000;
+  const limitServer = 10000000;
+  
+  const pctOperasionalBudget = Math.min(100, Math.round((operasionalSpentThisMonth / limitOperasional) * 100));
+  const pctServerBudget = Math.min(100, Math.round((serverSpentThisMonth / limitServer) * 100));
 
   const totalIncome = transactions
     .filter(t => t.tipe === "Debit")
@@ -639,7 +865,16 @@ export function useUserDashboard({
     isOffline,
     onLogout,
     customers,
-    aiInsight
+    aiInsight,
+    debitChangePct,
+    kreditChangePct,
+    debitDiffAmount,
+    kreditDiffAmount,
+    pctOperasional,
+    pctLayananHosting,
+    pctLainLain,
+    pctOperasionalBudget,
+    pctServerBudget
   };
 }
 export type { Transaction, FormState };

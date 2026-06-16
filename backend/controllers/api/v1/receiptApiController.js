@@ -1,6 +1,6 @@
 import ReceiptModel from '../../../models/receiptModel.js';
 import InvoiceModel from '../../../models/invoiceModel.js';
-import ExtTransactionModel from '../../../models/extTransactionModel.js';
+import TransactionModel from '../../../models/transactionModel.js';
 import { generateReceiptPdf } from '../../../services/pdfService.js';
 import { onTransactionPaid } from '../../../services/callbackService.js';
 import { pool } from '../../../config/db.js';
@@ -19,8 +19,8 @@ class ReceiptApiController {
     }
 
     try {
-      const extTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
-      if (!extTrx) {
+      const trx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
+      if (!trx) {
         return res.status(404).json({
           status: 'error',
           code: 'TRANSACTION_NOT_FOUND',
@@ -28,8 +28,7 @@ class ReceiptApiController {
         });
       }
 
-      const internalId = extTrx.internal_transaction_id;
-      const inv = await InvoiceModel.findByTransaksiId(internalId);
+      const inv = await InvoiceModel.findByTransaksiId(trx.id);
 
       if (!inv) {
         return res.status(400).json({
@@ -85,10 +84,10 @@ class ReceiptApiController {
         nomorKwitansi = receipt.nomor_kwitansi;
       }
 
-      // 3. Update ext_transactions status to paid
-      if (extTrx.status !== 'paid') {
-        await ExtTransactionModel.updateStatus(extTrx.id, 'paid');
-        await onTransactionPaid(extTrx.id, nomorKwitansi);
+      // 3. Mark transaction as paid (lunas)
+      if (trx.status_konfirmasi !== 'lunas') {
+        await TransactionModel.approve(trx.id, req.user?.id || null);
+        await onTransactionPaid(trx.id, nomorKwitansi);
       }
 
       return res.status(201).json({
@@ -117,8 +116,8 @@ class ReceiptApiController {
     const clientId = req.apiClient.id;
 
     try {
-      const extTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
-      if (!extTrx) {
+      const trx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
+      if (!trx) {
         return res.status(404).json({
           status: 'error',
           code: 'TRANSACTION_NOT_FOUND',
@@ -126,7 +125,7 @@ class ReceiptApiController {
         });
       }
 
-      const inv = await InvoiceModel.findByTransaksiId(extTrx.internal_transaction_id);
+      const inv = await InvoiceModel.findByTransaksiId(trx.id);
       if (!inv) {
         return res.status(404).json({
           status: 'error',

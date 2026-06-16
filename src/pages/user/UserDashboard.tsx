@@ -94,7 +94,16 @@ export default function UserDashboard({
     selectedReceipt,
     setSelectedReceipt,
     selectedDocType,
-    setSelectedDocType
+    setSelectedDocType,
+    debitChangePct,
+    kreditChangePct,
+    debitDiffAmount,
+    kreditDiffAmount,
+    pctOperasional,
+    pctLayananHosting,
+    pctLainLain,
+    pctOperasionalBudget,
+    pctServerBudget
   } = useUserDashboard({
     profile,
     setProfile,
@@ -173,7 +182,7 @@ export default function UserDashboard({
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 bg-[#F8FAFC] custom-scrollbar pb-24">
-          <div className="max-w-6xl">
+          <div className="w-full">
             <AnimatePresence mode="wait">
               {activeMenu === "Dashboard" ? (
                 <UserOverview
@@ -188,6 +197,15 @@ export default function UserDashboard({
                   formatRupiah={formatRupiah}
                   setActiveMenu={setActiveMenu}
                   aiInsight={aiInsight}
+                  debitChangePct={debitChangePct}
+                  kreditChangePct={kreditChangePct}
+                  debitDiffAmount={debitDiffAmount}
+                  kreditDiffAmount={kreditDiffAmount}
+                  pctOperasional={pctOperasional}
+                  pctLayananHosting={pctLayananHosting}
+                  pctLainLain={pctLainLain}
+                  pctOperasionalBudget={pctOperasionalBudget}
+                  pctServerBudget={pctServerBudget}
                 />
               ) : activeMenu === "Input" ? (
                 <TransactionInput

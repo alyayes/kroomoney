@@ -9,9 +9,22 @@ import { pool } from '../config/db.js';
 import { writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STORAGE_DIR = join(__dirname, '..', 'storage');
+
+// Load logo.png as base64 for PDF rendering
+const logoPath = join(__dirname, '..', '..', 'public', 'logo.png');
+let logoBase64 = '';
+try {
+  if (fs.existsSync(logoPath)) {
+    const logoData = fs.readFileSync(logoPath);
+    logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
+  }
+} catch (err) {
+  console.error('Error loading logo.png in pdfService:', err);
+}
 
 // ─── Helpers ───────────────────────────────────────────────────
 export function formatRp(n) {
@@ -39,7 +52,7 @@ async function getCompanySettings() {
   try {
     const keys = ['company_name', 'company_address', 'company_city', 'company_phone', 'company_email', 'company_website', 'signer_name', 'signer_title'];
     const [rows] = await pool.query(
-      `SELECT setting_key, setting_value FROM global_settings WHERE setting_key IN (${keys.map(() => '?').join(',')})`,
+      `SELECT setting_key, setting_value FROM settings WHERE setting_key IN (${keys.map(() => '?').join(',')})`,
       keys
     );
     const cfg = {};
@@ -63,19 +76,6 @@ async function getCompanySettings() {
     };
   }
 }
-
-// Kroombox logo SVG (replicates the building/box logo from template)
-const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="52" height="52">
-  <rect x="2" y="8" width="56" height="44" rx="3" ry="3" fill="none" stroke="#1a3a6b" stroke-width="3.5"/>
-  <rect x="10" y="16" width="18" height="28" rx="1" fill="none" stroke="#1a3a6b" stroke-width="2.5"/>
-  <line x1="10" y1="22" x2="28" y2="22" stroke="#1a3a6b" stroke-width="2"/>
-  <line x1="10" y1="28" x2="28" y2="28" stroke="#1a3a6b" stroke-width="2"/>
-  <line x1="10" y1="34" x2="28" y2="34" stroke="#1a3a6b" stroke-width="2"/>
-  <line x1="10" y1="40" x2="28" y2="40" stroke="#1a3a6b" stroke-width="2"/>
-  <rect x="33" y="24" width="20" height="20" rx="1" fill="none" stroke="#1a3a6b" stroke-width="2.5"/>
-  <line x1="33" y1="30" x2="53" y2="30" stroke="#1a3a6b" stroke-width="2"/>
-  <line x1="33" y1="36" x2="53" y2="36" stroke="#1a3a6b" stroke-width="2"/>
-</svg>`;
 
 // ─── Invoice HTML Template ──────────────────────────────────────
 export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
@@ -130,7 +130,7 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
     border-right: 1px solid #f0f0f0;
   }
   .gutter-label {
-    font-size: 30px; font-weight: 900; color: #1a1a1a;
+    font-size: 30px; font-weight: 900; color: #1a3a6b;
     white-space: nowrap; letter-spacing: 2px;
     writing-mode: vertical-rl; transform: rotate(180deg);
     font-style: italic;
@@ -143,13 +143,15 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
   }
 
   /* HEADER */
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
-  .company-name { font-size: 22px; font-weight: 900; color: #111; margin-bottom: 3px; }
-  .company-addr { font-size: 10.5px; color: #666; }
-  .logo-wrap { display: flex; align-items: center; gap: 6px; }
-  .logo-txt { display: flex; flex-direction: column; line-height: 1; }
-  .logo-kroom { font-size: 19px; font-weight: 900; color: #111; }
-  .logo-box { font-size: 19px; font-weight: 900; color: #555; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+  .company-info { display: flex; flex-direction: column; gap: 3px; }
+  .company-name { font-size: 24px; font-weight: 900; color: #1a3a6b; }
+  .company-subtitle { font-size: 10px; font-weight: 700; color: #666; letter-spacing: 1px; margin-bottom: 5px; }
+  .company-addr { font-size: 11px; color: #555; line-height: 1.4; max-width: 320px; }
+  .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .logo-img { height: 45px; object-fit: contain; margin-bottom: 4px; }
+  .title-invoice { font-size: 30px; font-weight: 900; color: #1a3a6b; letter-spacing: 1.5px; line-height: 1; }
+  .invoice-num { font-size: 13px; font-weight: 700; color: #444; }
 
   .redline { height: 1.5px; background: #e05252; margin-bottom: 14px; }
 
@@ -162,7 +164,7 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
 
   /* ITEMS TABLE */
   table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
-  thead tr { background: #e05252; }
+  thead tr { background: #1a3a6b; }
   thead th {
     color: #fff; font-size: 10.5px; font-weight: 700;
     padding: 9px 10px; text-align: left;
@@ -186,9 +188,9 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
   .s-row { display: flex; justify-content: space-between; border-bottom: 0.5px solid #e8e8e8; }
   .s-lbl { padding: 7px 10px; font-size: 11.5px; color: #555; text-align: right; flex: 1; }
   .s-val { padding: 7px 0 7px 10px; font-size: 11.5px; color: #222; min-width: 130px; text-align: right; }
-  .s-row.amount-due { border-top: 2px solid #e05252; border-bottom: none; }
-  .s-row.amount-due .s-lbl { font-weight: 700; font-size: 12.5px; color: #111; }
-  .s-row.amount-due .s-val { font-weight: 700; font-size: 12.5px; color: #111; }
+  .s-row.amount-due { border-top: 2px solid #1a3a6b; border-bottom: none; }
+  .s-row.amount-due .s-lbl { font-weight: 700; font-size: 12.5px; color: #1a3a6b; }
+  .s-row.amount-due .s-val { font-weight: 700; font-size: 12.5px; color: #1a3a6b; }
 
   /* FOOTER */
   .footer {
@@ -208,16 +210,18 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
   <div class="main">
     <!-- HEADER -->
     <div class="header">
-      <div>
+      <div class="company-info">
         <div class="company-name">${company.name}</div>
-        <div class="company-addr">${company.address}</div>
-      </div>
-      <div class="logo-wrap">
-        ${LOGO_SVG}
-        <div class="logo-txt">
-          <span class="logo-kroom">Kroom</span>
-          <span class="logo-box">box</span>
+        <div class="company-subtitle">FINANCE & CLOUD SOLUTIONS</div>
+        <div class="company-addr">
+          ${company.address}<br/>
+          Tel: ${company.phone} | Email: ${company.email}
         </div>
+      </div>
+      <div class="header-right">
+        ${logoBase64 ? `<img class="logo-img" src="${logoBase64}" alt="Logo" />` : ''}
+        <div class="title-invoice">INVOICE</div>
+        <div class="invoice-num">#${invoice.nomor_invoice}</div>
       </div>
     </div>
 
@@ -226,11 +230,11 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
     <!-- DATE & BILLING FOR -->
     <div class="info-row">
       <div>
-        <div class="info-label">Date</div>
+        <div class="info-label">Tanggal Terbit</div>
         <div class="info-val">${tanggal}</div>
       </div>
       <div>
-        <div class="info-label">Billing For</div>
+        <div class="info-label">Ditagih Ke</div>
         <div class="info-val">${customerName}</div>
         ${invoice.no_whatsapp || invoice.no_wa_manual ? `<div class="info-sub">WA: ${invoice.no_whatsapp || invoice.no_wa_manual}</div>` : ''}
       </div>
@@ -241,10 +245,10 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
     <table>
       <thead>
         <tr>
-          <th>Description</th>
-          <th class="th-center">Quantity</th>
-          <th class="th-center">Price</th>
-          <th class="th-center">Discount</th>
+          <th>Deskripsi</th>
+          <th class="th-center">Jumlah</th>
+          <th class="th-center">Harga Satuan</th>
+          <th class="th-center">Diskon</th>
           <th class="th-right">Total</th>
         </tr>
       </thead>
@@ -258,9 +262,26 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
     <div class="summary-wrap">
       <div class="summary-table">
         <div class="s-row"><div class="s-lbl">Subtotal</div><div class="s-val">${formatRp(subtotal)}</div></div>
-        <div class="s-row"><div class="s-lbl">Sales Tax</div><div class="s-val">0</div></div>
-        <div class="s-row"><div class="s-lbl">Total</div><div class="s-val">${formatRp(total)}</div></div>
-        <div class="s-row amount-due"><div class="s-lbl"><strong>Amount Due</strong></div><div class="s-val"><strong>${formatRp(total)}</strong></div></div>
+        <div class="s-row"><div class="s-lbl">Pajak (0%)</div><div class="s-val">Rp0</div></div>
+        <div class="s-row amount-due"><div class="s-lbl"><strong>Total Tagihan</strong></div><div class="s-val"><strong>${formatRp(total)}</strong></div></div>
+      </div>
+    </div>
+
+    <!-- TERMS & BANK DETAILS -->
+    <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #eee; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <div>
+        <div style="font-size: 9.5px; font-weight: 700; color: #1a3a6b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Syarat Pembayaran & Catatan</div>
+        <div style="font-size: 10px; color: #666; line-height: 1.4;">
+          ${invoice.catatan || "Silakan lakukan pembayaran sebelum tanggal jatuh tempo. Terima kasih atas kerja sama Anda!"}
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 9.5px; font-weight: 700; color: #1a3a6b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Detail Transfer Bank</div>
+        <div style="font-size: 10px; color: #666; line-height: 1.4;">
+          <strong>Bank BCA</strong><br/>
+          No. Rekening: 1234567890<br/>
+          Nama: PT Kroombox Indonesia
+        </div>
       </div>
     </div>
 
@@ -317,6 +338,7 @@ export function buildKwitansiHtml(receipt, invoice, company, tandaTangan) {
   .kwt-logo-txt { display: flex; flex-direction: column; line-height: 1.1; }
   .kwt-logo-kroom { font-size: 14px; font-weight: 900; color: #1a3a6b; font-family: Arial, sans-serif; }
   .kwt-logo-box   { font-size: 14px; font-weight: 900; color: #1a3a6b; font-family: Arial, sans-serif; }
+  .kwt-logo-img { height: 35px; object-fit: contain; }
   .kwt-title {
     font-size: 15px; font-weight: 700;
     letter-spacing: 1.5px; text-decoration: underline;
@@ -361,9 +383,9 @@ export function buildKwitansiHtml(receipt, invoice, company, tandaTangan) {
   }
   .kwt-sign-logo {
     position: absolute; opacity: 0.18;
-    display: flex; align-items: center; gap: 4px;
+    display: flex; align-items: center; justify-content: center;
   }
-  .kwt-sign-logo-txt { flex-direction: column; line-height: 1.1; }
+  .kwt-sign-logo-img { height: 48px; object-fit: contain; }
   .kwt-sign-img {
     position: relative; z-index: 2;
     max-height: 64px; max-width: 170px;
@@ -381,21 +403,7 @@ export function buildKwitansiHtml(receipt, invoice, company, tandaTangan) {
   <!-- HEADER -->
   <div class="kwt-header">
     <div class="kwt-logo">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="38" height="38">
-        <rect x="2" y="8" width="56" height="44" rx="3" fill="none" stroke="#1a3a6b" stroke-width="3.5"/>
-        <rect x="10" y="16" width="18" height="28" rx="1" fill="none" stroke="#1a3a6b" stroke-width="2.5"/>
-        <line x1="10" y1="22" x2="28" y2="22" stroke="#1a3a6b" stroke-width="2"/>
-        <line x1="10" y1="28" x2="28" y2="28" stroke="#1a3a6b" stroke-width="2"/>
-        <line x1="10" y1="34" x2="28" y2="34" stroke="#1a3a6b" stroke-width="2"/>
-        <line x1="10" y1="40" x2="28" y2="40" stroke="#1a3a6b" stroke-width="2"/>
-        <rect x="33" y="24" width="20" height="20" rx="1" fill="none" stroke="#1a3a6b" stroke-width="2.5"/>
-        <line x1="33" y1="30" x2="53" y2="30" stroke="#1a3a6b" stroke-width="2"/>
-        <line x1="33" y1="36" x2="53" y2="36" stroke="#1a3a6b" stroke-width="2"/>
-      </svg>
-      <div class="kwt-logo-txt">
-        <span class="kwt-logo-kroom">Kroom</span>
-        <span class="kwt-logo-box">box</span>
-      </div>
+      ${logoBase64 ? `<img class="kwt-logo-img" src="${logoBase64}" alt="Logo" />` : ''}
     </div>
     <div class="kwt-title">KWITANSI PEMBAYARAN</div>
     <div class="kwt-header-right"></div>
@@ -434,21 +442,7 @@ export function buildKwitansiHtml(receipt, invoice, company, tandaTangan) {
       <div class="kwt-sign-area">
         <!-- Logo watermark -->
         <div class="kwt-sign-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="52" height="52">
-            <rect x="2" y="8" width="56" height="44" rx="3" fill="none" stroke="#1a3a6b" stroke-width="3.5"/>
-            <rect x="10" y="16" width="18" height="28" rx="1" fill="none" stroke="#1a3a6b" stroke-width="2.5"/>
-            <line x1="10" y1="22" x2="28" y2="22" stroke="#1a3a6b" stroke-width="2"/>
-            <line x1="10" y1="28" x2="28" y2="28" stroke="#1a3a6b" stroke-width="2"/>
-            <line x1="10" y1="34" x2="28" y2="34" stroke="#1a3a6b" stroke-width="2"/>
-            <line x1="10" y1="40" x2="28" y2="40" stroke="#1a3a6b" stroke-width="2"/>
-            <rect x="33" y="24" width="20" height="20" rx="1" fill="none" stroke="#1a3a6b" stroke-width="2.5"/>
-            <line x1="33" y1="30" x2="53" y2="30" stroke="#1a3a6b" stroke-width="2"/>
-            <line x1="33" y1="36" x2="53" y2="36" stroke="#1a3a6b" stroke-width="2"/>
-          </svg>
-          <div style="display:flex;flex-direction:column;line-height:1.1;">
-            <span style="font-size:13px;font-weight:900;color:#1a3a6b;font-family:Arial,sans-serif;">Kroom</span>
-            <span style="font-size:13px;font-weight:900;color:#1a3a6b;font-family:Arial,sans-serif;">box</span>
-          </div>
+          ${logoBase64 ? `<img class="kwt-sign-logo-img" src="${logoBase64}" alt="Watermark" />` : ''}
         </div>
         <!-- Signature image -->
         ${ttdSrc ? `<img class="kwt-sign-img" src="${ttdSrc}" alt="TTD"/>` : '<div style="height:64px;"></div>'}

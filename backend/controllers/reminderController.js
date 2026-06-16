@@ -1,4 +1,4 @@
-﻿import {
+import {
   runReminderCycle,
   scheduleReminders,
   processReminderJobs,
@@ -6,9 +6,8 @@
   sendManualReminder,
 } from '../services/reminderService.js';
 import { verifySmtpConnection } from '../services/emailService.js';
-import ReminderLogModel from '../models/reminderLogModel.js';
-import ReminderJobModel from '../models/reminderJobModel.js';
-import NotificationSettingModel from '../models/notificationSettingModel.js';
+import ReminderModel from '../models/reminderModel.js';
+import SettingModel from '../models/settingModel.js';
 import { pool } from '../config/db.js';
 
 export const runReminders = async (req, res) => {
@@ -57,7 +56,7 @@ export const getReminderPreview = async (req, res) => {
 
 export const getReminderHistory = async (req, res) => {
   try {
-    const rows = await ReminderLogModel.findAll();
+    const rows = await ReminderModel.findAll();
     const mapped = rows.map(r => ({
       id: r.id,
       invoiceId: r.invoice_id,
@@ -65,9 +64,9 @@ export const getReminderHistory = async (req, res) => {
       customer: r.nama_pelanggan || r.nama_manual || 'Manual',
       tipeReminder: r.tipe_reminder,
       channel: r.channel,
-      noTujuan: r.no_tujuan,
-      statusKirim: r.status_kirim,
-      responseGateway: r.response_gateway,
+      noTujuan: r.email_tujuan || r.recipient_contact,
+      statusKirim: r.status,
+      responseGateway: r.gateway_response || r.error_message,
       createdAt: r.created_at,
     }));
     return res.status(200).json({ status: 'success', data: mapped, total: mapped.length });
@@ -79,7 +78,7 @@ export const getReminderHistory = async (req, res) => {
 export const getReminderJobs = async (req, res) => {
   try {
     const { status, tipe } = req.query;
-    const jobs = await ReminderJobModel.findAll({ status, tipe_reminder: tipe });
+    const jobs = await ReminderModel.findAll({ status, tipe_reminder: tipe });
     return res.status(200).json({ status: 'success', data: jobs, total: jobs.length });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Gagal mengambil data reminder jobs.' });
@@ -92,7 +91,7 @@ export const sendManual = async (req, res) => {
     if (!invoice_id || !email_tujuan) {
       return res.status(400).json({ status: 'error', message: 'invoice_id dan email_tujuan wajib diisi.' });
     }
-    const result = await sendManualReminder({ invoice_id, tipe_reminder: tipe_reminder || 'manual', email_tujuan, dikirim_oleh: req.user.id });
+    const result = await sendManualReminder({ invoice_id, tipe_reminder: tipe_reminder || 'manual', email_tujuan, dikirim_oleh: req.user?.id || null });
     await logAudit(req, `Manual send reminder ke ${email_tujuan} untuk Invoice #${invoice_id}`);
     return res.status(200).json({ status: 'success', message: 'Reminder berhasil dikirim!', data: result });
   } catch (err) {
@@ -102,9 +101,11 @@ export const sendManual = async (req, res) => {
 
 export const getReminderSettings = async (req, res) => {
   try {
-    const cfg = await NotificationSettingModel.getSchedulerConfig();
-    const all = await NotificationSettingModel.getAll();
-    return res.status(200).json({ status: 'success', data: { scheduler: cfg, all } });
+    const [cfgRows] = await pool.query("SELECT setting_key, setting_value FROM settings WHERE setting_group = 'scheduler'");
+    const cfg = {};
+    cfgRows.forEach(r => { cfg[r.setting_key] = r.setting_value === 'true' || r.setting_value === '1'; });
+    const allRows = await SettingModel.findAll();
+    return res.status(200).json({ status: 'success', data: { scheduler: cfg, all: allRows } });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Gagal mengambil konfigurasi.' });
   }
@@ -114,7 +115,9 @@ export const updateReminderSettings = async (req, res) => {
   try {
     const { settings } = req.body;
     if (!Array.isArray(settings)) return res.status(400).json({ status: 'error', message: 'Format: { settings: [{ key, value, group }] }' });
-    await NotificationSettingModel.setMany(settings);
+    for (const s of settings) {
+      await SettingModel.upsert({ key: s.key, value: s.value, group: s.group || 'scheduler' });
+    }
     await logAudit(req, 'Update konfigurasi reminder service');
     return res.status(200).json({ status: 'success', message: 'Konfigurasi berhasil diperbarui.' });
   } catch (err) {
@@ -134,6 +137,9 @@ export const testSmtpConnection = async (req, res) => {
 async function logAudit(req, aktivitas) {
   try {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-    await pool.query('INSERT INTO user_audit_trails (user_id, aktivitas, ip_address) VALUES (?, ?, ?)', [req.user.id, aktivitas, ip]);
-  } catch {}
+    const ua = req.headers['user-agent'] || '';
+    await pool.query('INSERT INTO audit_logs (user_id, action, ip_address, user_agent) VALUES (?, ?, ?, ?)', [req.user?.id || null, aktivitas, ip, ua]);
+  } catch (err) {
+    console.error('Audit log failed:', err);
+  }
 }

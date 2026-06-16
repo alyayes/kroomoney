@@ -1,5 +1,4 @@
 import CustomerModel from '../../../models/customerModel.js';
-import ExtCustomerModel from '../../../models/extCustomerModel.js';
 
 class CustomerSyncController {
   static async syncCustomer(req, res) {
@@ -16,85 +15,66 @@ class CustomerSyncController {
     }
 
     try {
-      // Find if external mapping already exists
-      const existingMap = await ExtCustomerModel.findByExternalId(external_customer_id, clientId);
+      // Find if customer already exists for this API client
+      const existingCustomer = await CustomerModel.findByExternalId(external_customer_id, clientId);
 
-      if (!existingMap) {
+      if (!existingCustomer) {
         // Create new customer
-        const internalCustomerId = `EXT-${clientCode.toUpperCase()}-${external_customer_id}`;
+        const internalCustomerCode = `EXT-${clientCode.toUpperCase()}-${external_customer_id}`;
 
-        // Insert into master_customers
-        await CustomerModel.create({
-          id_pelanggan: internalCustomerId,
+        const insertId = await CustomerModel.create({
+          id_pelanggan: internalCustomerCode,
           nama_pelanggan: name,
           no_whatsapp: phone || '-',
           email: email || null,
           paket_hosting: 'API External Customer',
           nominal_tagihan: 0,
-          tanggal_jatuh_tempo: new Date().toISOString().split('T')[0]
-        });
-
-        // Insert mapping into ext_customers
-        await ExtCustomerModel.upsert({
-          external_customer_id,
-          source_client_id: clientId,
-          internal_customer_id: internalCustomerId,
-          customer_name: name,
-          customer_email: email,
-          customer_phone: phone,
-          raw_data
+          tanggal_jatuh_tempo: new Date().toISOString().split('T')[0],
+          source_type: 'api',
+          external_customer_id: external_customer_id,
+          api_client_id: clientId,
+          metadata: raw_data
         });
 
         return res.status(201).json({
           status: 'success',
           message: 'Customer berhasil disinkronkan (dibuat).',
           data: {
-            internal_customer_id: internalCustomerId,
+            internal_customer_id: insertId,
+            customer_code: internalCustomerCode,
             sync_status: 'created'
           }
         });
       }
 
       // Customer already exists, check if updates are needed
-      const internalId = existingMap.internal_customer_id;
-      const internalCustomer = await CustomerModel.findById(internalId);
-
       let isChanged = false;
-      if (internalCustomer) {
-        if (internalCustomer.nama_pelanggan !== name ||
-            internalCustomer.no_whatsapp !== (phone || null) ||
-            internalCustomer.email !== (email || null)) {
-          isChanged = true;
-        }
+      if (existingCustomer.nama_pelanggan !== name ||
+          existingCustomer.no_whatsapp !== (phone || null) ||
+          existingCustomer.email !== (email || null)) {
+        isChanged = true;
       }
 
-      if (isChanged && internalCustomer) {
-        // Update master_customers
-        await CustomerModel.update(internalId, {
+      if (isChanged) {
+        // Update customers
+        await CustomerModel.update(existingCustomer.id_pelanggan, {
           nama_pelanggan: name,
           no_whatsapp: phone || '-',
           email: email || null,
-          paket_hosting: internalCustomer.paket_hosting || 'API External Customer',
-          nominal_tagihan: internalCustomer.nominal_tagihan || 0,
-          tanggal_jatuh_tempo: internalCustomer.tanggal_jatuh_tempo ? new Date(internalCustomer.tanggal_jatuh_tempo).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+          paket_hosting: existingCustomer.paket_hosting || 'API External Customer',
+          nominal_tagihan: existingCustomer.nominal_tagihan || 0,
+          tanggal_jatuh_tempo: existingCustomer.tanggal_jatuh_tempo ? new Date(existingCustomer.tanggal_jatuh_tempo).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
         });
-
-        // Update ext_customers mapping
-        await ExtCustomerModel.upsert({
-          external_customer_id,
-          source_client_id: clientId,
-          internal_customer_id: internalId,
-          customer_name: name,
-          customer_email: email,
-          customer_phone: phone,
-          raw_data
-        });
+        
+        // We might also want to update raw_data metadata, but CustomerModel.update doesn't update metadata currently.
+        // It's acceptable for now or we could add another method if needed.
 
         return res.status(200).json({
           status: 'success',
           message: 'Customer berhasil disinkronkan (diupdate).',
           data: {
-            internal_customer_id: internalId,
+            internal_customer_id: existingCustomer.id,
+            customer_code: existingCustomer.id_pelanggan,
             sync_status: 'updated'
           }
         });
@@ -104,7 +84,8 @@ class CustomerSyncController {
         status: 'success',
         message: 'Customer sudah sinkron (tidak ada perubahan).',
         data: {
-          internal_customer_id: internalId,
+          internal_customer_id: existingCustomer.id,
+          customer_code: existingCustomer.id_pelanggan,
           sync_status: 'unchanged'
         }
       });
@@ -123,8 +104,8 @@ class CustomerSyncController {
     const clientId = req.apiClient.id;
 
     try {
-      const customerMap = await ExtCustomerModel.findByExternalId(external_customer_id, clientId);
-      if (!customerMap) {
+      const customer = await CustomerModel.findByExternalId(external_customer_id, clientId);
+      if (!customer) {
         return res.status(404).json({
           status: 'error',
           code: 'CUSTOMER_NOT_FOUND',
@@ -132,19 +113,17 @@ class CustomerSyncController {
         });
       }
 
-      const internalCustomer = await CustomerModel.findById(customerMap.internal_customer_id);
-
       return res.status(200).json({
         status: 'success',
         data: {
-          external_customer_id: customerMap.external_customer_id,
-          internal_customer_id: customerMap.internal_customer_id,
-          name: customerMap.customer_name,
-          email: customerMap.customer_email,
-          phone: customerMap.customer_phone,
-          raw_data: customerMap.raw_data,
-          internal_details: internalCustomer,
-          created_at: customerMap.created_at
+          external_customer_id: customer.external_customer_id,
+          internal_customer_id: customer.id,
+          customer_code: customer.id_pelanggan,
+          name: customer.nama_pelanggan,
+          email: customer.email,
+          phone: customer.no_whatsapp,
+          raw_data: customer.metadata,
+          created_at: customer.created_at
         }
       });
     } catch (err) {
@@ -159,3 +138,4 @@ class CustomerSyncController {
 }
 
 export default CustomerSyncController;
+

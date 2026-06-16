@@ -18,7 +18,7 @@ const TRANSPORTER_TTL_MS = 5 * 60 * 1000; // Refresh config setiap 5 menit
 async function getSmtpConfig() {
   try {
     const [rows] = await pool.query(
-      "SELECT setting_key, setting_value FROM global_settings WHERE setting_key IN ('smtp_host','smtp_port','smtp_user','smtp_password','smtp_from_name','smtp_from_email','smtp_encryption')"
+      "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('smtp_host','smtp_port','smtp_user','smtp_password','smtp_from_name','smtp_from_email','smtp_encryption')"
     );
     const cfg = {};
     rows.forEach(r => { cfg[r.setting_key] = r.setting_value; });

@@ -1,5 +1,6 @@
 import ReceiptModel from '../models/receiptModel.js';
 import InvoiceModel from '../models/invoiceModel.js';
+import AuditLogModel from '../models/auditLogModel.js';
 import { pool } from '../config/db.js';
 import { generateReceiptPdf, getReceiptPreviewHtml } from '../services/pdfService.js';
 import { sendEmail } from '../services/emailService.js';
@@ -230,7 +231,10 @@ export const deleteReceipt = async (req, res) => {
 async function logAudit(req, aktivitas) {
   try {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-    await pool.query('INSERT INTO user_audit_trails (user_id, aktivitas, ip_address) VALUES (?, ?, ?)',
-      [req.user.id, aktivitas, ip]);
+    await AuditLogModel.create({
+      user_id: req.user.id,
+      action: aktivitas,
+      ip_address: ip
+    });
   } catch {}
 }

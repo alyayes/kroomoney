@@ -1,8 +1,8 @@
 /**
  * reminderService.js
- * Core reminder logic:
+ * Core reminder logic for V7 (Single reminders table):
  *   1. detectDueInvoices()  — temukan invoice mendekati/melewati jatuh tempo
- *   2. scheduleJobs()       — buat reminder_jobs (deduplication via UNIQUE KEY)
+ *   2. scheduleJobs()       — buat reminders job (deduplication via UNIQUE KEY)
  *   3. processJobs()        — kirim email untuk pending jobs
  *   4. run()                — full cycle: detect → schedule → process
  *   5. preview()            — dry-run tanpa pengiriman
@@ -11,15 +11,12 @@
 
 import { pool } from '../config/db.js';
 import { sendEmail } from './emailService.js';
-import EmailTemplateModel from '../models/emailTemplateModel.js';
-import ReminderJobModel from '../models/reminderJobModel.js';
-import ReminderLogModel from '../models/reminderLogModel.js';
-import NotificationSettingModel from '../models/notificationSettingModel.js';
+import ReminderModel from '../models/reminderModel.js';
 
 // Status invoice yang boleh mendapat reminder
 const ALLOWED_STATUSES = ['draft', 'terkirim', 'overdue'];
 
-// Default template HTML untuk setiap tipe (fallback jika tidak ada di DB)
+// Default template HTML untuk setiap tipe
 const DEFAULT_TEMPLATES = {
   H30: {
     subject: '[Kroomoney] Pengingat Tagihan — {{days_remaining}} Hari Lagi',
@@ -95,56 +92,66 @@ function getTipeReminder(days) {
 async function getActiveInvoices() {
   const [rows] = await pool.query(
     `SELECT 
-       i.id, i.nomor_invoice, i.transaksi_id, i.pelanggan_id, i.nama_manual, i.no_wa_manual,
-       i.total, i.status_invoice, i.tanggal_jatuh_tempo,
-       c.nama_pelanggan, c.no_whatsapp,
+       i.id, i.invoice_number AS nomor_invoice, i.transaction_id AS transaksi_id, i.customer_id AS pelanggan_id, i.nama_manual, i.no_wa_manual,
+       i.total, i.status AS status_invoice, i.due_date AS tanggal_jatuh_tempo,
+       c.name AS nama_pelanggan, c.phone AS no_whatsapp,
        t.no_whatsapp_manual AS t_wa_manual,
        t.nama_manual AS t_nama_manual
      FROM invoices i
-     LEFT JOIN master_customers c ON i.pelanggan_id = c.id_pelanggan
-     LEFT JOIN transaksi t ON i.transaksi_id = t.id
-     WHERE i.status_invoice NOT IN ('dibayar', 'dibatalkan')
-     ORDER BY i.tanggal_jatuh_tempo ASC`
+     LEFT JOIN customers c ON i.customer_id = c.id
+     LEFT JOIN transactions t ON i.transaction_id = t.id
+     WHERE i.status NOT IN ('dibayar', 'dibatalkan') AND i.deleted_at IS NULL
+     ORDER BY i.due_date ASC`
   );
   return rows;
 }
 
 /**
- * Ambil email customer dari transaksi (jika ada di customer master)
+ * Ambil email customer
  */
 async function getCustomerEmail(pelanggan_id) {
   if (!pelanggan_id) return null;
-  // master_customers belum punya kolom email di schema aktual
-  // coba dari global_settings atau langsung return null
   const [rows] = await pool.query(
-    'SELECT email FROM master_customers WHERE id_pelanggan = ? LIMIT 1',
+    'SELECT email FROM customers WHERE id = ? AND deleted_at IS NULL LIMIT 1',
     [pelanggan_id]
   );
   return rows[0]?.email || null;
 }
 
 /**
- * Render email dari template DB atau fallback ke default template
+ * Render email dari default template
  */
 async function renderEmail(tipeReminder, data) {
-  // Coba ambil dari DB dulu
-  let template = await EmailTemplateModel.findDefault(tipeReminder);
+  const def = DEFAULT_TEMPLATES[tipeReminder] || DEFAULT_TEMPLATES.H7;
+  let subject = def.subject;
+  let bodyHtml = def.body_html;
 
-  if (!template) {
-    // Gunakan default template bawaan
-    const def = DEFAULT_TEMPLATES[tipeReminder] || DEFAULT_TEMPLATES.H7;
-    template = { subject: def.subject, body_html: def.body_html, body_text: null };
+  for (const [key, value] of Object.entries(data)) {
+    const regex = new RegExp(`{{${key}}}`, 'g');
+    const safeValue = value || '';
+    subject = subject.replace(regex, safeValue);
+    bodyHtml = bodyHtml.replace(regex, safeValue);
   }
 
-  return EmailTemplateModel.render(template, data);
+  return { subject, bodyHtml, bodyText: null };
 }
 
 /**
  * DETECT + SCHEDULE: Temukan invoice yang perlu diremind dan buat job-nya
- * @returns {{ scheduled: number, skipped: number, details: Array }}
  */
 export async function scheduleReminders() {
-  const cfg = await NotificationSettingModel.getSchedulerConfig();
+  // Ambil config scheduler
+  const [cfgRows] = await pool.query("SELECT setting_key, setting_value FROM settings WHERE setting_group = 'scheduler'");
+  const cfg = {
+    reminder_h30_enabled: true,
+    reminder_h7_enabled: true,
+    reminder_h1_enabled: true,
+    reminder_overdue_enabled: true,
+  };
+  cfgRows.forEach(r => {
+    cfg[r.setting_key] = r.setting_value === 'true' || r.setting_value === '1';
+  });
+
   const invoices = await getActiveInvoices();
 
   let scheduled = 0;
@@ -161,9 +168,9 @@ export async function scheduleReminders() {
     if (tipe === 'H1' && !cfg.reminder_h1_enabled) { skipped++; continue; }
     if (tipe === 'overdue' && !cfg.reminder_overdue_enabled) { skipped++; continue; }
 
-    // Cek duplikat (sudah ada job sent untuk tipe ini)
-    const existing = await ReminderJobModel.exists(inv.id, tipe, 'email');
-    if (existing && existing.status === 'sent') {
+    // Cek duplikat (sudah ada reminder sent/pending untuk tipe ini)
+    const existing = await ReminderModel.exists(inv.id, tipe, 'email');
+    if (existing && (existing.status === 'sent' || existing.status === 'pending')) {
       skipped++;
       continue;
     }
@@ -171,11 +178,11 @@ export async function scheduleReminders() {
     // Tentukan email tujuan
     const email = await getCustomerEmail(inv.pelanggan_id);
 
-    await ReminderJobModel.create({
+    await ReminderModel.create({
       invoice_id: inv.id,
-      pelanggan_id: inv.pelanggan_id || null,
-      email_tujuan: email,
-      tipe_reminder: tipe,
+      customer_id: inv.pelanggan_id || null,
+      recipient_contact: email,
+      reminder_type: tipe,
       channel: 'email',
       scheduled_at: new Date(),
     });
@@ -196,11 +203,10 @@ export async function scheduleReminders() {
 
 /**
  * PROCESS JOBS: Kirim email untuk semua pending jobs
- * @returns {{ sent: number, failed: number, skipped: number, results: Array }}
  */
 export async function processReminderJobs() {
-  const pendingJobs = await ReminderJobModel.findPending();
-  const retryJobs = await ReminderJobModel.findRetryable();
+  const pendingJobs = await ReminderModel.findPending();
+  const retryJobs = await ReminderModel.findRetryable();
   const jobs = [...pendingJobs, ...retryJobs];
 
   let sent = 0, failed = 0, skipped = 0;
@@ -208,39 +214,39 @@ export async function processReminderJobs() {
 
   // Ambil config nama perusahaan
   const [companyRows] = await pool.query(
-    "SELECT setting_value FROM global_settings WHERE setting_key = 'smtp_from_name' LIMIT 1"
+    "SELECT setting_value FROM settings WHERE setting_key = 'smtp_from_name' LIMIT 1"
   );
   const companyName = companyRows[0]?.setting_value || 'Kroomoney';
 
   const [supportRows] = await pool.query(
-    "SELECT setting_value FROM global_settings WHERE setting_key = 'smtp_user' LIMIT 1"
+    "SELECT setting_value FROM settings WHERE setting_key = 'smtp_user' LIMIT 1"
   );
   const supportEmail = supportRows[0]?.setting_value || 'support@kroomoney.com';
 
   for (const job of jobs) {
     // Skip jika invoice sudah dibayar/dibatalkan
     if (['dibayar', 'dibatalkan'].includes(job.status_invoice)) {
-      await ReminderJobModel.updateStatus(job.id, 'skipped', {});
+      await ReminderModel.updateStatus(job.id, 'skipped', {});
       skipped++;
       continue;
     }
 
     // Skip jika tidak ada email tujuan
     if (!job.email_tujuan) {
-      await ReminderJobModel.updateStatus(job.id, 'skipped', { error_message: 'Tidak ada alamat email tujuan' });
+      await ReminderModel.updateStatus(job.id, 'skipped', { error_message: 'Tidak ada alamat email tujuan' });
       skipped++;
       results.push({ job_id: job.id, status: 'skipped', reason: 'no_email' });
       continue;
     }
 
     // Lock job untuk processing
-    const locked = await ReminderJobModel.markProcessing(job.id);
+    const locked = await ReminderModel.markProcessing(job.id);
     if (!locked) continue; // Sudah diproses di run lain
 
     try {
       const days = diffDays(job.tanggal_jatuh_tempo);
       const rendered = await renderEmail(job.tipe_reminder, {
-        customer_name: job.nama_pelanggan || 'Pelanggan',
+        customer_name: job.nama_pelanggan || job.nama_manual || 'Pelanggan',
         invoice_number: job.nomor_invoice,
         amount: job.total,
         due_date: job.tanggal_jatuh_tempo,
@@ -257,58 +263,23 @@ export async function processReminderJobs() {
       });
 
       // Update job sebagai sent
-      await ReminderJobModel.updateStatus(job.id, 'sent', { sent_at: new Date() });
-
-      // Catat ke reminder_logs
-      await ReminderLogModel.create({
-        invoice_id: job.invoice_id,
-        pelanggan_id: job.pelanggan_id,
-        nama_manual: job.nama_pelanggan || null,
-        tipe_reminder: job.tipe_reminder,
-        channel: 'email',
-        no_tujuan: job.email_tujuan,
-        isi_pesan: rendered.subject,
-        dikirim_oleh: null,
+      await ReminderModel.updateStatus(job.id, 'sent', { 
+        sent_at: new Date(),
+        gateway_response: JSON.stringify({ messageId: info.messageId, accepted: info.accepted }),
+        message_content: rendered.subject
       });
-      await ReminderLogModel.updateStatus(
-        // Get last inserted log id
-        await getLastReminderLogId(),
-        'berhasil',
-        JSON.stringify({ messageId: info.messageId, accepted: info.accepted })
-      );
 
       sent++;
       results.push({ job_id: job.id, status: 'sent', to: job.email_tujuan, messageId: info.messageId });
 
     } catch (err) {
-      await ReminderJobModel.updateStatus(job.id, 'failed', { error_message: err.message });
-
-      // Log ke reminder_logs sebagai gagal
-      try {
-        await ReminderLogModel.create({
-          invoice_id: job.invoice_id,
-          pelanggan_id: job.pelanggan_id,
-          nama_manual: null,
-          tipe_reminder: job.tipe_reminder,
-          channel: 'email',
-          no_tujuan: job.email_tujuan,
-          isi_pesan: `GAGAL: ${err.message}`,
-          dikirim_oleh: null,
-        });
-        await ReminderLogModel.updateStatus(await getLastReminderLogId(), 'gagal', err.message);
-      } catch {}
-
+      await ReminderModel.updateStatus(job.id, 'failed', { error_message: err.message });
       failed++;
       results.push({ job_id: job.id, status: 'failed', error: err.message });
     }
   }
 
   return { sent, failed, skipped, total_jobs: jobs.length, results };
-}
-
-async function getLastReminderLogId() {
-  const [rows] = await pool.query('SELECT LAST_INSERT_ID() AS id');
-  return rows[0]?.id;
 }
 
 /**
@@ -325,7 +296,7 @@ export async function runReminderCycle() {
 }
 
 /**
- * PREVIEW: Dry-run tanpa pengiriman — tampilkan siapa yang akan dapat reminder
+ * PREVIEW: Dry-run tanpa pengiriman
  */
 export async function previewReminders() {
   const invoices = await getActiveInvoices();
@@ -336,7 +307,7 @@ export async function previewReminders() {
     const tipe = getTipeReminder(days);
     if (!tipe) continue;
 
-    const existing = await ReminderJobModel.exists(inv.id, tipe, 'email');
+    const existing = await ReminderModel.exists(inv.id, tipe, 'email');
     const alreadySent = existing?.status === 'sent';
     const email = await getCustomerEmail(inv.pelanggan_id);
 
@@ -359,17 +330,15 @@ export async function previewReminders() {
 
 /**
  * MANUAL SEND: Kirim reminder langsung ke satu invoice
- * @param {number} invoice_id
- * @param {string} tipe_reminder - H30 | H7 | H1 | overdue | manual
- * @param {string} email_tujuan
- * @param {number|null} dikirim_oleh - user_id yang trigger
  */
 export async function sendManualReminder({ invoice_id, tipe_reminder, email_tujuan, dikirim_oleh }) {
   // Fetch invoice
   const [invRows] = await pool.query(
-    `SELECT i.*, c.nama_pelanggan FROM invoices i
-     LEFT JOIN master_customers c ON i.pelanggan_id = c.id_pelanggan
-     WHERE i.id = ?`,
+    `SELECT i.id, i.invoice_number AS nomor_invoice, i.total, i.status AS status_invoice, i.due_date AS tanggal_jatuh_tempo,
+            i.nama_manual, i.customer_id AS pelanggan_id, c.name AS nama_pelanggan 
+     FROM invoices i
+     LEFT JOIN customers c ON i.customer_id = c.id
+     WHERE i.id = ? AND i.deleted_at IS NULL`,
     [invoice_id]
   );
   const inv = invRows[0];
@@ -379,9 +348,9 @@ export async function sendManualReminder({ invoice_id, tipe_reminder, email_tuju
   }
 
   const days = diffDays(inv.tanggal_jatuh_tempo);
-  const [companyRows] = await pool.query("SELECT setting_value FROM global_settings WHERE setting_key = 'smtp_from_name' LIMIT 1");
+  const [companyRows] = await pool.query("SELECT setting_value FROM settings WHERE setting_key = 'smtp_from_name' LIMIT 1");
   const companyName = companyRows[0]?.setting_value || 'Kroomoney';
-  const [supportRows] = await pool.query("SELECT setting_value FROM global_settings WHERE setting_key = 'smtp_user' LIMIT 1");
+  const [supportRows] = await pool.query("SELECT setting_value FROM settings WHERE setting_key = 'smtp_user' LIMIT 1");
   const supportEmail = supportRows[0]?.setting_value || 'support@kroomoney.com';
 
   const rendered = await renderEmail(tipe_reminder || 'manual', {
@@ -401,18 +370,22 @@ export async function sendManualReminder({ invoice_id, tipe_reminder, email_tuju
     text: rendered.bodyText,
   });
 
-  // Log to reminder_logs
-  const logId = await ReminderLogModel.create({
+  // Log to reminders
+  const reminderId = await ReminderModel.create({
     invoice_id,
-    pelanggan_id: inv.pelanggan_id || null,
-    nama_manual: inv.nama_manual || null,
-    tipe_reminder: tipe_reminder || 'manual',
+    customer_id: inv.pelanggan_id || null,
+    recipient_contact: email_tujuan,
+    reminder_type: tipe_reminder || 'manual',
     channel: 'email',
-    no_tujuan: email_tujuan,
-    isi_pesan: rendered.subject,
-    dikirim_oleh,
+    scheduled_at: new Date(),
+    message_content: rendered.subject,
+    sent_by: dikirim_oleh
   });
-  await ReminderLogModel.updateStatus(logId, 'berhasil', JSON.stringify(info));
+  
+  await ReminderModel.updateStatus(reminderId, 'sent', {
+    sent_at: new Date(),
+    gateway_response: JSON.stringify(info)
+  });
 
   return {
     sent: true,

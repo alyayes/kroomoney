@@ -1,5 +1,4 @@
 import ApiClientModel from '../../../models/apiClientModel.js';
-import ApiTokenModel from '../../../models/apiTokenModel.js';
 import { generateApiJwt } from '../../../middleware/apiAuth.js';
 
 class AuthApiController {
@@ -31,9 +30,6 @@ class AuthApiController {
       const token = generateApiJwt(client.id, client.client_code);
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours expiry
-
-      // Save token record
-      await ApiTokenModel.create(client.id, token, expiresAt);
 
       return res.status(200).json({
         status: 'success',

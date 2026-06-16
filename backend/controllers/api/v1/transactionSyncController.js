@@ -1,6 +1,4 @@
 import TransactionModel from '../../../models/transactionModel.js';
-import ExtTransactionModel from '../../../models/extTransactionModel.js';
-import ExtCustomerModel from '../../../models/extCustomerModel.js';
 import CustomerModel from '../../../models/customerModel.js';
 import { pool } from '../../../config/db.js';
 
@@ -39,16 +37,16 @@ class TransactionSyncController {
 
     try {
       // 1. Check if transaction already exists
-      const existingTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
+      const existingTrx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
       if (existingTrx) {
         return res.status(200).json({
           status: 'success',
           message: 'Transaksi sudah ada.',
           data: {
-            internal_transaction_id: existingTrx.internal_transaction_id,
+            internal_transaction_id: existingTrx.id,
             external_transaction_id: existingTrx.external_transaction_id,
             transaction: {
-              status: existingTrx.status,
+              status: existingTrx.status_konfirmasi,
               sync_status: 'exists'
             }
           }
@@ -56,110 +54,71 @@ class TransactionSyncController {
       }
 
       // 2. Sync customer first
-      let extCust = await ExtCustomerModel.findByExternalId(customer.external_customer_id, clientId);
-      let internalCustomerId;
+      let cust = await CustomerModel.findByExternalId(customer.external_customer_id, clientId);
       let isNewCustomer = false;
 
-      if (!extCust) {
+      if (!cust) {
         // Create new customer
         isNewCustomer = true;
-        internalCustomerId = `EXT-${clientCode.toUpperCase()}-${customer.external_customer_id}`;
+        const internalCustomerCode = `EXT-${clientCode.toUpperCase()}-${customer.external_customer_id}`;
 
-        await CustomerModel.create({
-          id_pelanggan: internalCustomerId,
+        const insertId = await CustomerModel.create({
+          id_pelanggan: internalCustomerCode,
           nama_pelanggan: customer.name,
           no_whatsapp: customer.phone || '-',
           email: customer.email || null,
           paket_hosting: 'API External Customer',
           nominal_tagihan: 0,
-          tanggal_jatuh_tempo: new Date().toISOString().split('T')[0]
-        });
-
-        const upsertRes = await ExtCustomerModel.upsert({
+          tanggal_jatuh_tempo: new Date().toISOString().split('T')[0],
+          source_type: 'api',
           external_customer_id: customer.external_customer_id,
-          source_client_id: clientId,
-          internal_customer_id: internalCustomerId,
-          customer_name: customer.name,
-          customer_email: customer.email,
-          customer_phone: customer.phone,
-          raw_data: customer
+          api_client_id: clientId,
+          metadata: customer
         });
 
-        // Fetch back the newly created mapping to get its DB auto-increment ID
-        extCust = await ExtCustomerModel.findByExternalId(customer.external_customer_id, clientId);
+        cust = await CustomerModel.findById(insertId);
       } else {
-        internalCustomerId = extCust.internal_customer_id;
-        const internalCustomer = await CustomerModel.findById(internalCustomerId);
-
         // Check for updates
         let isChanged = false;
-        if (internalCustomer) {
-          if (internalCustomer.nama_pelanggan !== customer.name ||
-              internalCustomer.no_whatsapp !== (customer.phone || null) ||
-              internalCustomer.email !== (customer.email || null)) {
-            isChanged = true;
-          }
+        if (cust.nama_pelanggan !== customer.name ||
+            cust.no_whatsapp !== (customer.phone || null) ||
+            cust.email !== (customer.email || null)) {
+          isChanged = true;
         }
 
-        if (isChanged && internalCustomer) {
-          await CustomerModel.update(internalCustomerId, {
+        if (isChanged) {
+          await CustomerModel.update(cust.id_pelanggan, {
             nama_pelanggan: customer.name,
             no_whatsapp: customer.phone || '-',
             email: customer.email || null,
-            paket_hosting: internalCustomer.paket_hosting || 'API External Customer',
-            nominal_tagihan: internalCustomer.nominal_tagihan || 0,
-            tanggal_jatuh_tempo: internalCustomer.tanggal_jatuh_tempo ? new Date(internalCustomer.tanggal_jatuh_tempo).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
-          });
-
-          await ExtCustomerModel.upsert({
-            external_customer_id: customer.external_customer_id,
-            source_client_id: clientId,
-            internal_customer_id: internalCustomerId,
-            customer_name: customer.name,
-            customer_email: customer.email,
-            customer_phone: customer.phone,
-            raw_data: customer
+            paket_hosting: cust.paket_hosting || 'API External Customer',
+            nominal_tagihan: cust.nominal_tagihan || 0,
+            tanggal_jatuh_tempo: cust.tanggal_jatuh_tempo ? new Date(cust.tanggal_jatuh_tempo).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
           });
         }
       }
 
-      // 3. Create transaction record in internal 'transaksi' table
+      // 3. Create transaction record in internal 'transactions' table
       const nominalTransfer = Number(transaction.amount) * (Number(transaction.quantity) || 1);
 
       const internalTxId = await TransactionModel.create({
-        pelanggan_id: internalCustomerId,
+        pelanggan_id: cust.id,
         nama_manual: null,
         no_whatsapp_manual: null,
         nominal_transfer: nominalTransfer,
         kuantitas: Number(transaction.quantity) || 1,
-        tanggal_bayar: new Date().toISOString().split('T')[0],
+        tanggal_bayar: transaction.due_date || new Date().toISOString().split('T')[0],
         status_konfirmasi: 'pending',
-        status_dokumen: 'Draft',
+        status_dokumen: 'draft',
         sertakan_tanda_tangan: 1,
-        tipe_transaksi: 'Pemasukan',
+        tipe_transaksi: 'pemasukan',
         notes: `${transaction.service_name} - ${transaction.description || ''}`,
         dikonfirmasi_oleh: null,
         source_type: 'api',
-        ext_transaction_id: null // Will update this after creating ext_transaction
+        ext_transaction_id: external_transaction_id,
+        api_client_id: clientId,
+        service_name: transaction.service_name
       });
-
-      // 4. Create mapping in ext_transactions
-      const extTrxId = await ExtTransactionModel.create({
-        external_transaction_id,
-        source_client_id: clientId,
-        source_application,
-        internal_transaction_id: internalTxId,
-        ext_customer_id: extCust.id,
-        service_name: transaction.service_name,
-        description: transaction.description || null,
-        amount: Number(transaction.amount),
-        quantity: Number(transaction.quantity) || 1,
-        due_date: transaction.due_date,
-        raw_payload: req.body
-      });
-
-      // 5. Update transaksi.ext_transaction_id to establish the bidirectional reference
-      await pool.query('UPDATE transaksi SET ext_transaction_id = ? WHERE id = ?', [extTrxId, internalTxId]);
 
       return res.status(201).json({
         status: 'success',
@@ -168,7 +127,7 @@ class TransactionSyncController {
           internal_transaction_id: internalTxId,
           external_transaction_id,
           customer: {
-            internal_customer_id: internalCustomerId,
+            internal_customer_id: cust.id,
             sync_status: isNewCustomer ? 'created' : 'updated'
           },
           transaction: {
@@ -192,8 +151,8 @@ class TransactionSyncController {
     const clientId = req.apiClient.id;
 
     try {
-      const extTrx = await ExtTransactionModel.findByExternalId(external_transaction_id, clientId);
-      if (!extTrx) {
+      const trx = await TransactionModel.findByExternalId(external_transaction_id, clientId);
+      if (!trx) {
         return res.status(404).json({
           status: 'error',
           code: 'TRANSACTION_NOT_FOUND',
@@ -201,14 +160,9 @@ class TransactionSyncController {
         });
       }
 
-      const internalTrx = await TransactionModel.findById(extTrx.internal_transaction_id);
-
       return res.status(200).json({
         status: 'success',
-        data: {
-          ...extTrx,
-          internal_details: internalTrx
-        }
+        data: trx
       });
     } catch (err) {
       console.error('Error in getTransaction:', err);
@@ -225,16 +179,25 @@ class TransactionSyncController {
     const { status, page, limit } = req.query;
 
     try {
-      const result = await ExtTransactionModel.findAll({
-        source_client_id: clientId,
-        status,
-        page: parseInt(page) || 1,
-        limit: parseInt(limit) || 50
-      });
+      // Limit logic could be added to TransactionModel, but for now we get all and filter
+      let all = await TransactionModel.findAll();
+      let result = all.filter(t => t.api_client_id === clientId);
+      
+      if (status) {
+        result = result.filter(t => t.status_konfirmasi === status);
+      }
+
+      // Basic pagination
+      const p = parseInt(page) || 1;
+      const l = parseInt(limit) || 50;
+      const paginated = result.slice((p - 1) * l, p * l);
 
       return res.status(200).json({
         status: 'success',
-        data: result
+        data: paginated,
+        total: result.length,
+        page: p,
+        limit: l
       });
     } catch (err) {
       console.error('Error in getTransactions:', err);
@@ -248,3 +211,4 @@ class TransactionSyncController {
 }
 
 export default TransactionSyncController;
+

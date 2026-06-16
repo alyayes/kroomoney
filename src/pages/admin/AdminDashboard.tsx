@@ -14,6 +14,7 @@ import MasterDataPanel from "./components/MasterDataPanel";
 import GlobalReportList from "./components/GlobalReportList";
 import AuditSecurity from "./components/AuditSecurity";
 import SystemConfig from "./components/SystemConfig";
+import UserProfile from "../user/components/UserProfile";
 
 interface Profile {
   nama: string;
@@ -25,12 +26,13 @@ interface Profile {
 
 interface AdminDashboardProps {
   profile: Profile;
+  setProfile: React.Dispatch<React.SetStateAction<Profile>>;
   token: string | null;
   onLogout: () => void;
   isOffline: boolean;
 }
 
-export default function AdminDashboard({ profile, token, onLogout, isOffline }: AdminDashboardProps) {
+export default function AdminDashboard({ profile, setProfile, token, onLogout, isOffline: initialIsOffline }: AdminDashboardProps) {
   const {
     activeMenu,
     setActiveMenu,
@@ -68,7 +70,10 @@ export default function AdminDashboard({ profile, token, onLogout, isOffline }: 
     fileInputRef,
     totalTrxVolume,
     chartData,
+    timeframe,
+    setTimeframe,
     triggerNotification,
+    isOffline,
     
     // Customer parameters
     customers,
@@ -80,7 +85,27 @@ export default function AdminDashboard({ profile, token, onLogout, isOffline }: 
     setCustomerForm,
     handleSaveCustomer,
     handleDeleteCustomer
-  } = useAdminDashboard({ profile, token, onLogout, isOffline });
+  } = useAdminDashboard({ profile, token, onLogout, isOffline: initialIsOffline });
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: "fotoProfil" | "tandaTangan") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      triggerNotification(`Gagal: Ukuran file melebihi 2MB!`, "error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfile(prev => {
+        const next = { ...prev, [field]: reader.result as string };
+        localStorage.setItem("kroombox_user_profile", JSON.stringify(next));
+        return next;
+      });
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="flex h-screen bg-[#FFFFFF] font-sans text-[#1E2D50] overflow-hidden">
@@ -123,9 +148,16 @@ export default function AdminDashboard({ profile, token, onLogout, isOffline }: 
                 <Settings className="w-4.5 h-4.5" />
               </button>
               
-              <div className="flex items-center gap-3.5 pl-3 border-l border-[#DBEEFF]">
-                <div className="w-9 h-9 rounded-xl bg-[#EAF4FF] flex items-center justify-center p-1 font-bold text-[#2563EB] text-sm shadow-sm border border-[#DBEEFF]">
-                  AD
+              <div 
+                className="flex items-center gap-3.5 pl-3 border-l border-[#DBEEFF] cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setActiveMenu("My Profile")}
+              >
+                <div className="w-9 h-9 rounded-xl bg-[#EAF4FF] overflow-hidden flex items-center justify-center p-0 font-bold text-[#2563EB] text-sm shadow-sm border border-[#DBEEFF]">
+                  {profile.fotoProfil ? (
+                    <img src={profile.fotoProfil} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    "AD"
+                  )}
                 </div>
                 <div className="hidden md:block">
                   <p className="text-xs font-black text-[#1E2D50] leading-none">{profile.nama || "Super Admin"}</p>
@@ -147,6 +179,8 @@ export default function AdminDashboard({ profile, token, onLogout, isOffline }: 
                 totalTrxVolume={totalTrxVolume}
                 serverMetrics={serverMetrics}
                 chartData={chartData}
+                timeframe={timeframe}
+                setTimeframe={setTimeframe}
                 auditLogs={auditLogs}
                 setActiveMenu={setActiveMenu}
               />
@@ -201,6 +235,15 @@ export default function AdminDashboard({ profile, token, onLogout, isOffline }: 
                 fileInputRef={fileInputRef}
                 handleRestoreBackup={handleRestoreBackup}
                 triggerNotification={triggerNotification}
+              />
+            ) : activeMenu === "My Profile" ? (
+              <UserProfile
+                profile={profile}
+                setProfile={setProfile}
+                token={token}
+                isOffline={isOffline}
+                transactionsCount={filteredTransactions.length}
+                handleFileUpload={handleFileUpload}
               />
             ) : null}
           </AnimatePresence>

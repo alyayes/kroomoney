@@ -81,124 +81,144 @@ export default function InvoiceTemplate({ invoice, items, company = DEFAULT_COMP
   return (
     <div style={{
       width: "210mm", minHeight: "297mm",
-      background: "#fff", display: "flex", flexDirection: "row",
+      background: "#fff", display: "flex", flexDirection: "column",
       fontFamily: "'Helvetica Neue', Arial, Helvetica, sans-serif",
       color: "#1a1a1a", fontSize: "12px",
+      padding: "40px", boxSizing: "border-box",
+      position: "relative"
     }}>
-      {/* LEFT GUTTER — rotated invoice number */}
-      <div style={{
-        width: "44px", flexShrink: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        borderRight: "1px solid #f0f0f0",
-      }}>
-        <div style={{
-          fontSize: "30px", fontWeight: 900, color: "#1a1a1a",
-          whiteSpace: "nowrap", letterSpacing: "2px",
-          writingMode: "vertical-rl" as const,
-          transform: "rotate(180deg)",
-          fontStyle: "italic",
-        }}>
-          Invoice {invShort}
+      {/* Decorative top border */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "8px", background: "#1a3a6b" }} />
+
+      {/* HEADER SECTION */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "40px", marginTop: "10px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <span style={{ fontSize: "28px", fontWeight: 900, color: "#1a3a6b" }}>{company.name}</span>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "#666", letterSpacing: "1.5px" }}>FINANCE & CLOUD SOLUTIONS</span>
+          <div style={{ fontSize: "11px", color: "#555", lineHeight: 1.5, marginTop: "8px", maxWidth: "320px" }}>
+            {company.address}<br/>
+            Tel: {company.phone} | Email: {company.email}
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+          <img src="/logo.png" alt="Kroombox Logo" style={{ height: "50px", objectFit: "contain", marginBottom: "4px" }} />
+          <div style={{ fontSize: "36px", fontWeight: 900, color: "#1a3a6b", textTransform: "uppercase", letterSpacing: "2px", lineHeight: 1 }}>INVOICE</div>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: "#444" }}>#{invoice.nomor_invoice}</div>
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
-      <div style={{ flex: 1, padding: "36px 36px 28px 28px", display: "flex", flexDirection: "column" }}>
-
-        {/* HEADER */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-          <div>
-            <div style={{ fontSize: "22px", fontWeight: 900, color: "#111", marginBottom: "3px" }}>{company.name}</div>
-            <div style={{ fontSize: "10.5px", color: "#666" }}>{company.address}</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <KroomboxLogo size={52} />
-            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-              <span style={{ fontSize: "19px", fontWeight: 900, color: "#111" }}>Kroom</span>
-              <span style={{ fontSize: "19px", fontWeight: 900, color: "#555" }}>box</span>
+      {/* COMPANY & BILLING DETAILS */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", marginBottom: "40px" }}>
+        {/* Dari */}
+        <div>
+          <div style={{ fontSize: "11px", fontWeight: 800, color: "#1a3a6b", textTransform: "uppercase", letterSpacing: "1px", borderBottom: "2px solid #f0f0f0", paddingBottom: "6px", marginBottom: "12px" }}>Dari</div>
+          <div style={{ fontSize: "16px", fontWeight: 800, color: "#111", marginBottom: "6px" }}>{company.name}</div>
+          <div style={{ fontSize: "12px", color: "#555", lineHeight: 1.5, maxWidth: "250px" }}>{company.address}</div>
+          <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>Tel: {company.phone}</div>
+          <div style={{ fontSize: "12px", color: "#555", marginTop: "2px" }}>Email: {company.email}</div>
+        </div>
+        
+        {/* Ditagih Ke */}
+        <div>
+          <div style={{ fontSize: "11px", fontWeight: 800, color: "#1a3a6b", textTransform: "uppercase", letterSpacing: "1px", borderBottom: "2px solid #f0f0f0", paddingBottom: "6px", marginBottom: "12px" }}>Ditagih Ke</div>
+          <div style={{ fontSize: "16px", fontWeight: 800, color: "#111", marginBottom: "6px" }}>{customerName}</div>
+          {(invoice.no_whatsapp || invoice.no_wa_manual) && (
+            <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>WA: {invoice.no_whatsapp || invoice.no_wa_manual}</div>
+          )}
+          <div style={{ marginTop: "16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", background: "#f8f9fa", padding: "12px", borderRadius: "6px" }}>
+            <div>
+              <span style={{ display: "block", fontSize: "10px", color: "#777", textTransform: "uppercase", fontWeight: 700, marginBottom: "2px" }}>Tanggal Terbit</span>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#111" }}>{formatDate(invoice.tanggal_terbit)}</span>
+            </div>
+            <div>
+              <span style={{ display: "block", fontSize: "10px", color: "#e05252", textTransform: "uppercase", fontWeight: 700, marginBottom: "2px" }}>Jatuh Tempo</span>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#e05252" }}>{invoice.tanggal_jatuh_tempo ? formatDate(invoice.tanggal_jatuh_tempo) : '-'}</span>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* RED LINE */}
-        <div style={{ height: "1.5px", background: "#e05252", marginBottom: "14px" }} />
-
-        {/* DATE & BILLING FOR */}
-        <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", marginBottom: "16px" }}>
-          <div>
-            <div style={{ fontSize: "9.5px", fontWeight: 700, color: "#e05252", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "5px" }}>Date</div>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#111" }}>{formatDate(invoice.tanggal_terbit)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: "9.5px", fontWeight: 700, color: "#e05252", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "5px" }}>Billing For</div>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#111" }}>{customerName}</div>
-            {(invoice.no_whatsapp || invoice.no_wa_manual) && (
-              <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>WA: {invoice.no_whatsapp || invoice.no_wa_manual}</div>
-            )}
-          </div>
-        </div>
-
-        {/* THIN LINE */}
-        <div style={{ height: "0.5px", background: "#d0d0d0", marginBottom: "18px" }} />
-
-        {/* ITEMS TABLE */}
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      {/* ITEMS TABLE */}
+      <div style={{ flex: 1 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
           <thead>
-            <tr style={{ background: "#e05252" }}>
-              <th style={{ color: "#fff", fontSize: "10.5px", fontWeight: 700, padding: "9px 10px", textAlign: "left" }}>Description</th>
-              <th style={{ color: "#fff", fontSize: "10.5px", fontWeight: 700, padding: "9px 10px", textAlign: "center" }}>Quantity</th>
-              <th style={{ color: "#fff", fontSize: "10.5px", fontWeight: 700, padding: "9px 10px", textAlign: "center" }}>Price</th>
-              <th style={{ color: "#fff", fontSize: "10.5px", fontWeight: 700, padding: "9px 10px", textAlign: "center" }}>Discount</th>
-              <th style={{ color: "#fff", fontSize: "10.5px", fontWeight: 700, padding: "9px 10px", textAlign: "right" }}>Total</th>
+            <tr style={{ background: "#1a3a6b" }}>
+              <th style={{ color: "#fff", fontSize: "11px", fontWeight: 700, padding: "12px 16px", textAlign: "left", borderRadius: "6px 0 0 0" }}>Deskripsi</th>
+              <th style={{ color: "#fff", fontSize: "11px", fontWeight: 700, padding: "12px 16px", textAlign: "center" }}>Jumlah</th>
+              <th style={{ color: "#fff", fontSize: "11px", fontWeight: 700, padding: "12px 16px", textAlign: "right" }}>Harga Satuan</th>
+              <th style={{ color: "#fff", fontSize: "11px", fontWeight: 700, padding: "12px 16px", textAlign: "right" }}>Diskon</th>
+              <th style={{ color: "#fff", fontSize: "11px", fontWeight: 700, padding: "12px 16px", textAlign: "right", borderRadius: "0 6px 0 0" }}>Total</th>
             </tr>
           </thead>
           <tbody>
             {(items || []).map((item, idx) => (
-              <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
-                <td style={{ padding: "9px 10px", fontSize: "11px", color: "#222", verticalAlign: "top" }}>
-                  <span style={{ display: "block", fontWeight: 500 }}>{item.deskripsi}</span>
-                  {item.sub_deskripsi && <span style={{ display: "block", fontSize: "10px", color: "#666", marginTop: "1px" }}>{item.sub_deskripsi}</span>}
+              <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "14px 16px", fontSize: "12px", color: "#222", verticalAlign: "top" }}>
+                  <span style={{ display: "block", fontWeight: 600 }}>{item.deskripsi}</span>
+                  {item.sub_deskripsi && <span style={{ display: "block", fontSize: "11px", color: "#777", marginTop: "4px" }}>{item.sub_deskripsi}</span>}
                 </td>
-                <td style={{ padding: "9px 10px", fontSize: "11px", color: "#222", textAlign: "center" }}>{item.kuantitas}</td>
-                <td style={{ padding: "9px 10px", fontSize: "11px", color: "#222", textAlign: "center" }}>{formatRp(item.harga_satuan)}</td>
-                <td style={{ padding: "9px 10px", fontSize: "11px", color: "#222", textAlign: "center" }}>{item.diskon_persen || 0}%</td>
-                <td style={{ padding: "9px 10px", fontSize: "11px", color: "#222", textAlign: "right" }}>{formatRp(item.subtotal)}</td>
+                <td style={{ padding: "14px 16px", fontSize: "12px", color: "#444", textAlign: "center", verticalAlign: "top" }}>{item.kuantitas}</td>
+                <td style={{ padding: "14px 16px", fontSize: "12px", color: "#444", textAlign: "right", verticalAlign: "top" }}>{formatRp(item.harga_satuan)}</td>
+                <td style={{ padding: "14px 16px", fontSize: "12px", color: "#444", textAlign: "right", verticalAlign: "top" }}>{item.diskon_persen || 0}%</td>
+                <td style={{ padding: "14px 16px", fontSize: "12px", fontWeight: 600, color: "#111", textAlign: "right", verticalAlign: "top" }}>{formatRp(item.subtotal)}</td>
               </tr>
             ))}
+            {/* Empty filler rows to push summary to bottom if few items */}
             {Array(emptyCount).fill(0).map((_, idx) => (
-              <tr key={`empty-${idx}`} style={{ height: "26px", borderBottom: "1px solid #f0f0f0" }}>
-                <td /><td /><td /><td /><td />
+              <tr key={`empty-${idx}`} style={{ borderBottom: "1px solid #fafafa" }}>
+                <td style={{ padding: "14px 16px" }} /><td /><td /><td /><td />
               </tr>
             ))}
           </tbody>
         </table>
 
-        {/* SUMMARY */}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "6px" }}>
-          <div style={{ width: "310px" }}>
-            {[
-              { label: "Subtotal", value: formatRp(subtotal), bold: false },
-              { label: "Sales Tax", value: "0", bold: false },
-              { label: "Total", value: formatRp(total), bold: false },
-            ].map(row => (
-              <div key={row.label} style={{ display: "flex", justifyContent: "space-between", borderBottom: "0.5px solid #e8e8e8" }}>
-                <div style={{ flex: 1, padding: "7px 10px", fontSize: "11.5px", color: "#555", textAlign: "right" }}>{row.label}</div>
-                <div style={{ padding: "7px 0 7px 10px", fontSize: "11.5px", color: "#222", minWidth: "130px", textAlign: "right" }}>{row.value}</div>
+        {/* SUMMARY SECTION */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
+          <div style={{ width: "350px", background: "#f8f9fa", borderRadius: "8px", padding: "24px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+              <span style={{ fontSize: "12px", color: "#666", fontWeight: 600 }}>Subtotal</span>
+              <span style={{ fontSize: "13px", color: "#111", fontWeight: 700 }}>{formatRp(subtotal)}</span>
+            </div>
+            {invoice.diskon > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+                <span style={{ fontSize: "12px", color: "#e05252", fontWeight: 600 }}>Diskon (Global)</span>
+                <span style={{ fontSize: "13px", color: "#e05252", fontWeight: 700 }}>-{formatRp(invoice.diskon)}</span>
               </div>
-            ))}
-            <div style={{ display: "flex", justifyContent: "space-between", borderTop: "2px solid #e05252" }}>
-              <div style={{ flex: 1, padding: "7px 10px", fontSize: "12.5px", fontWeight: 700, color: "#111", textAlign: "right" }}>Amount Due</div>
-              <div style={{ padding: "7px 0 7px 10px", fontSize: "12.5px", fontWeight: 700, color: "#111", minWidth: "130px", textAlign: "right" }}>{formatRp(total)}</div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
+              <span style={{ fontSize: "12px", color: "#666", fontWeight: 600 }}>Pajak (0%)</span>
+              <span style={{ fontSize: "13px", color: "#111", fontWeight: 700 }}>Rp0</span>
+            </div>
+            <div style={{ height: "1px", background: "#ddd", margin: "16px 0" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "14px", color: "#1a3a6b", fontWeight: 900, textTransform: "uppercase" }}>Total Tagihan</span>
+              <span style={{ fontSize: "20px", color: "#1a3a6b", fontWeight: 900 }}>{formatRp(total)}</span>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* FOOTER */}
-        <div style={{ marginTop: "auto", paddingTop: "18px", borderTop: "0.5px solid #ddd", display: "flex", gap: "24px", fontSize: "10px", color: "#999" }}>
-          <span>Tel: <strong style={{ color: "#555" }}>{company.phone}</strong></span>
-          <span>Email: <strong style={{ color: "#555" }}>{company.email}</strong></span>
-          <span>Web: <strong style={{ color: "#555" }}>{company.website}</strong></span>
+      {/* FOOTER & TERMS */}
+      <div style={{ marginTop: "40px", borderTop: "2px solid #f0f0f0", paddingTop: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+        <div>
+          <span style={{ display: "block", fontSize: "11px", fontWeight: 800, color: "#1a3a6b", textTransform: "uppercase", marginBottom: "6px" }}>Syarat Pembayaran & Catatan</span>
+          <p style={{ fontSize: "11px", color: "#666", lineHeight: 1.6, margin: 0 }}>
+            {invoice.catatan || "Silakan lakukan pembayaran sebelum tanggal jatuh tempo. Terima kasih atas kerja sama Anda!"}
+          </p>
         </div>
+        <div style={{ textAlign: "right" }}>
+          <span style={{ display: "block", fontSize: "11px", fontWeight: 800, color: "#1a3a6b", textTransform: "uppercase", marginBottom: "6px" }}>Detail Transfer Bank</span>
+          <p style={{ fontSize: "11px", color: "#666", lineHeight: 1.6, margin: 0 }}>
+            <strong>Bank BCA</strong><br/>
+            No. Rekening: 1234567890<br/>
+            Nama: PT Kroombox Indonesia
+          </p>
+        </div>
+      </div>
+      
+      {/* Absolute bottom footer */}
+      <div style={{ position: "absolute", bottom: "40px", left: "40px", right: "40px", textAlign: "center", fontSize: "10px", color: "#999" }}>
+        Kroombox • {company.address} • {company.website}
       </div>
     </div>
   );

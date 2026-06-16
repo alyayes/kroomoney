@@ -6,6 +6,7 @@ interface Treasurer {
   id: string;
   nama: string;
   email: string;
+  role?: string;
   status: string;
   startup: string;
   lastActive: string;
@@ -53,7 +54,7 @@ export default function UserManager({
     >
       {/* Actions bar */}
       <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-[#DBEEFF] shadow-[0_4px_12px_-4px_rgba(58,123,213,0.04)]">
-        <h4 className="text-base font-black text-[#1E2D50]">Daftar Staf Bendahara KroomBox</h4>
+        <h4 className="text-base font-black text-[#1E2D50]">Daftar Pengguna Sistem KroomBox</h4>
         <button
           onClick={() => {
             setEditingUser(null);
@@ -62,7 +63,7 @@ export default function UserManager({
           }}
           className="flex items-center gap-2 bg-[#2563EB] hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer border-none"
         >
-          <Plus className="w-4 h-4" /> TAMBAH BENDAHARA BARU
+          <Plus className="w-4 h-4" /> TAMBAH PENGGUNA BARU
         </button>
       </div>
 
@@ -72,10 +73,10 @@ export default function UserManager({
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="bg-[#EAF4FF] border-b border-[#DBEEFF] text-[10px] font-black uppercase text-[#5A6A85] tracking-widest select-none">
-                <th className="py-5 px-6">ID Staf</th>
+                <th className="py-5 px-6">ID</th>
                 <th className="py-5 px-6">Nama & Email</th>
-                <th className="py-5 px-6">Startup Afiliasi</th>
-                <th className="py-5 px-6">Terakhir Aktif</th>
+                <th className="py-5 px-6">Role</th>
+                <th className="py-5 px-6">Terdaftar Sejak</th>
                 <th className="py-5 px-6">Status</th>
                 <th className="py-5 px-6 text-right">Aksi</th>
               </tr>
@@ -90,7 +91,13 @@ export default function UserManager({
                       <span className="text-xs text-[#5A6A85]">{user.email}</span>
                     </div>
                   </td>
-                  <td className="py-5 px-6 text-xs font-bold text-[#5A6A85]">{user.startup}</td>
+                  <td className="py-5 px-6">
+                    <span className={`text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-full ${
+                      user.role === 'Admin' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'
+                    }`}>
+                      {user.role || 'Bendahara'}
+                    </span>
+                  </td>
                   <td className="py-5 px-6 text-xs text-slate-400">{user.lastActive}</td>
                   <td className="py-5 px-6">
                     <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${
@@ -159,7 +166,7 @@ export default function UserManager({
             </button>
 
             <h3 className="text-lg font-black text-[#1E2D50] tracking-tight mb-4">
-              {editingUser ? "Edit Profil Bendahara" : "Tambah Bendahara Baru"}
+              {editingUser ? "Edit Profil Pengguna" : "Tambah Pengguna Baru"}
             </h3>
 
             <form onSubmit={handleSaveUser} className="space-y-4">

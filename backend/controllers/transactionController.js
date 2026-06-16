@@ -1,6 +1,6 @@
 import TransactionModel from '../models/transactionModel.js';
 import CustomerModel from '../models/customerModel.js';
-import ExtTransactionModel from '../models/extTransactionModel.js';
+import AuditLogModel from '../models/auditLogModel.js';
 import { onTransactionVerified, onTransactionCancelled } from '../services/callbackService.js';
 
 // Get all transactions
@@ -70,7 +70,8 @@ export const createTransaction = async (req, res) => {
     // If customer selected, check if valid
     let customer = null;
     if (userId && String(userId).trim() !== "") {
-      customer = await CustomerModel.findById(userId);
+      // Find customer by customer code (userId here)
+      customer = await CustomerModel.findByCode(userId);
       if (!customer) {
         return res.status(400).json({
           status: 'error',
@@ -111,8 +112,8 @@ export const createTransaction = async (req, res) => {
 
     // Log to Audit Trail
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-    const activityMsg = `Menerbitkan Invoice ${tipe || 'Pemasukan'} - Keterangan: ${namaPembeli || (customer ? customer.nama_pelanggan : 'Manual')} - Nominal: Rp ${Number(jumlah).toLocaleString('id-ID')}`;
-    await TransactionModel.createAuditLog(req.user.id, activityMsg, ipAddress);
+    const activityMsg = `Menerbitkan Invoice ${tipe || 'Pemasukan'} - Keterangan: ${namaPembeli || (customer ? customer.name : 'Manual')} - Nominal: Rp ${Number(jumlah).toLocaleString('id-ID')}`;
+    await AuditLogModel.create({ user_id: req.user.id, action: activityMsg, ip_address: ipAddress });
 
     return res.status(201).json({
       status: 'success',
@@ -128,8 +129,8 @@ export const createTransaction = async (req, res) => {
         sertakanTandaTangan: !!sertakanTandaTangan,
         jumlah: Number(jumlah),
         kuantitas: Number(kuantitas) || 1,
-        namaPembeli: namaPembeli || (customer ? customer.nama_pelanggan : 'Input Manual'),
-        noTelepon: noTelepon || (customer ? customer.no_whatsapp : '-'),
+        namaPembeli: namaPembeli || (customer ? customer.name : 'Input Manual'),
+        noTelepon: noTelepon || (customer ? customer.phone : '-'),
         notes: notes || ''
       }
     });
@@ -178,7 +179,7 @@ export const updateTransaction = async (req, res) => {
 
     let customer = null;
     if (userId && String(userId).trim() !== "") {
-      customer = await CustomerModel.findById(userId);
+      customer = await CustomerModel.findByCode(userId);
       if (!customer) {
         return res.status(400).json({
           status: 'error',
@@ -218,8 +219,8 @@ export const updateTransaction = async (req, res) => {
 
     // Log to Audit Trail
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-    const activityMsg = `Memperbarui Transaksi ID #${id} (${tipe || 'Pemasukan'}) - Keterangan: ${namaPembeli || (customer ? customer.nama_pelanggan : 'Manual')} - Nominal: Rp ${Number(jumlah).toLocaleString('id-ID')}`;
-    await TransactionModel.createAuditLog(req.user.id, activityMsg, ipAddress);
+    const activityMsg = `Memperbarui Transaksi ID #${id} (${tipe || 'Pemasukan'}) - Keterangan: ${namaPembeli || (customer ? customer.name : 'Manual')} - Nominal: Rp ${Number(jumlah).toLocaleString('id-ID')}`;
+    await AuditLogModel.create({ user_id: req.user.id, action: activityMsg, ip_address: ipAddress });
 
     return res.status(200).json({
       status: 'success',
@@ -235,8 +236,8 @@ export const updateTransaction = async (req, res) => {
         sertakanTandaTangan: !!sertakanTandaTangan,
         jumlah: Number(jumlah),
         kuantitas: Number(kuantitas) || 1,
-        namaPembeli: namaPembeli || (customer ? customer.nama_pelanggan : 'Input Manual'),
-        noTelepon: noTelepon || (customer ? customer.no_whatsapp : '-'),
+        namaPembeli: namaPembeli || (customer ? customer.name : 'Input Manual'),
+        noTelepon: noTelepon || (customer ? customer.phone : '-'),
         notes: notes || ''
       }
     });
@@ -248,7 +249,9 @@ export const updateTransaction = async (req, res) => {
       message: 'Gagal memperbarui transaksi.'
     });
   }
-};// Approve transaction
+};
+
+// Approve transaction
 export const approveTransaction = async (req, res) => {
   try {
     const { id } = req.params;
@@ -267,13 +270,12 @@ export const approveTransaction = async (req, res) => {
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
     const identifier = existing.pelanggan_id ? `Pelanggan ${existing.pelanggan_id}` : `Transaksi Manual #${id}`;
     const activityMsg = `Menyetujui Pembayaran Masuk ID #${id} untuk ${identifier}`;
-    await TransactionModel.createAuditLog(req.user.id, activityMsg, ipAddress);
+    await AuditLogModel.create({ user_id: req.user.id, action: activityMsg, ip_address: ipAddress });
 
     // Check if API transaction and trigger callback
-    if (existing.source_type === 'api' && existing.ext_transaction_id) {
+    if (existing.source_type === 'api' && existing.external_transaction_id) {
       try {
-        await ExtTransactionModel.updateStatus(existing.ext_transaction_id, 'verified');
-        await onTransactionVerified(existing.ext_transaction_id, req.user.nama_lengkap || req.user.email || 'Bendahara');
+        await onTransactionVerified(id, req.user.nama_lengkap || req.user.email || 'Bendahara');
       } catch (cbErr) {
         console.error('Callback trigger error on approve:', cbErr.message);
       }
@@ -307,10 +309,9 @@ export const deleteTransaction = async (req, res) => {
     }
 
     // Check if API transaction and trigger callback
-    if (existing.source_type === 'api' && existing.ext_transaction_id) {
+    if (existing.source_type === 'api' && existing.external_transaction_id) {
       try {
-        await ExtTransactionModel.updateStatus(existing.ext_transaction_id, 'cancelled');
-        await onTransactionCancelled(existing.ext_transaction_id, 'Deleted from admin dashboard');
+        await onTransactionCancelled(id, 'Deleted from admin dashboard');
       } catch (cbErr) {
         console.error('Callback trigger error on delete:', cbErr.message);
       }
@@ -321,7 +322,7 @@ export const deleteTransaction = async (req, res) => {
     // Log to Audit Trail
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
     const activityMsg = `Menghapus Transaksi Pembayaran Masuk ID #${id}`;
-    await TransactionModel.createAuditLog(req.user.id, activityMsg, ipAddress);
+    await AuditLogModel.create({ user_id: req.user.id, action: activityMsg, ip_address: ipAddress });
 
     return res.status(200).json({
       status: 'success',
@@ -340,7 +341,7 @@ export const deleteTransaction = async (req, res) => {
 // Get audit logs for admin console
 export const getAuditLogs = async (req, res) => {
   try {
-    const rows = await TransactionModel.findAllAuditLogs();
+    const rows = await AuditLogModel.findAll();
 
     const mapped = rows.map(r => {
       // Parse ISO format to readable datetime string

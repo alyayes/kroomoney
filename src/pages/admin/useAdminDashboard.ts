@@ -20,6 +20,7 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
   const [activeMenu, setActiveMenu] = useState("Dashboard");
   const [isOffline, setIsOffline] = useState(initialIsOffline);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "warning" } | null>(null);
+  const [timeframe, setTimeframe] = useState<"Harian" | "Mingguan" | "Bulanan">("Mingguan");
 
   // --- STATS & MONITORING STATES ---
   const [serverMetrics, setServerMetrics] = useState({
@@ -76,8 +77,22 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
   };
 
   // --- STATES & DATA ---
-  const [treasurers, setTreasurers] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [treasurers, setTreasurers] = useState<any[]>(() => {
+    const savedTreasurers = localStorage.getItem("kroombox_admin_treasurers");
+    const parsed = savedTreasurers ? JSON.parse(savedTreasurers) : null;
+    return parsed && parsed.length > 0 ? parsed : [
+      { id: "TR-001", nama: "Fina Selia", email: "fina@kroombox.com", role: "Bendahara", status: "Active", startup: "Kroombox Corp", lastActive: "10 mins ago" },
+      { id: "TR-002", nama: "Dian Nugraha", email: "dian.n@gmail.com", role: "Bendahara", status: "Active", startup: "Kroombox Premium", lastActive: "1 hour ago" },
+      { id: "TR-003", nama: "Budi Santoso", email: "budi.st@domain.com", role: "Bendahara", status: "Inactive", startup: "Logistics Go", lastActive: "2 days ago" },
+      { id: "TR-004", nama: "Ayu Lestari", email: "ayu.lestari@kroombox.com", role: "Bendahara", status: "Active", startup: "Telkom Studio", lastActive: "Just now" }
+    ];
+  });
+  const [customers, setCustomers] = useState<any[]>(() => {
+    const savedCustomers = localStorage.getItem("kroombox_admin_customers");
+    return savedCustomers ? JSON.parse(savedCustomers) : [
+      { id_pelanggan: "CUST-001", nama_pelanggan: "Budi Dummy", no_whatsapp: "08123456789", paket_hosting: "Pro Hosting", nominal_tagihan: 250000, tanggal_jatuh_tempo: "2026-06-15" }
+    ];
+  });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [appSettings, setAppSettings] = useState({
@@ -109,14 +124,9 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
 
   // Sync / Load data from backend API
   const syncData = async () => {
-    if (!token || token === "offline-token-session") {
-      setIsOffline(true);
-      loadLocalData();
-      return;
-    }
-
+    // Always try the API first, even with offline token — server may have come back
     try {
-      // 1. Fetch Treasurers
+      // 1. Fetch Users (all users from users table)
       const tRes = await apiRequest("/auth/treasurers");
       if (tRes && tRes.data) setTreasurers(tRes.data);
 
@@ -155,18 +165,22 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     }
   };
 
+  const defaultTreasurers = [
+    { id: "TR-001", nama: "Fina Selia", email: "fina@kroombox.com", status: "Active", role: "Bendahara", startup: "Kroombox Corp", lastActive: "10 mins ago" },
+    { id: "TR-002", nama: "Dian Nugraha", email: "dian.n@gmail.com", status: "Active", role: "Bendahara", startup: "Kroombox Premium", lastActive: "1 hour ago" },
+    { id: "TR-003", nama: "Budi Santoso", email: "budi.st@domain.com", status: "Inactive", role: "Bendahara", startup: "Logistics Go", lastActive: "2 days ago" },
+    { id: "TR-004", nama: "Ayu Lestari", email: "ayu.lestari@kroombox.com", status: "Active", role: "Bendahara", startup: "Telkom Studio", lastActive: "Just now" }
+  ];
+
   const loadLocalData = () => {
-    // Load local storage fallbacks
+    // Load local storage fallbacks — check for empty arrays to avoid showing blank table
     const savedTreasurers = localStorage.getItem("kroombox_admin_treasurers");
-    setTreasurers(savedTreasurers ? JSON.parse(savedTreasurers) : [
-      { id: "TR-001", nama: "Fina Selia", email: "fina@kroombox.com", status: "Active", startup: "Kroombox Corp", lastActive: "10 mins ago" },
-      { id: "TR-002", nama: "Dian Nugraha", email: "dian.n@gmail.com", status: "Active", startup: "Kroombox Premium", lastActive: "1 hour ago" },
-      { id: "TR-003", nama: "Budi Santoso", email: "budi.st@domain.com", status: "Inactive", startup: "Logistics Go", lastActive: "2 days ago" },
-      { id: "TR-004", nama: "Ayu Lestari", email: "ayu.lestari@kroombox.com", status: "Active", startup: "Telkom Studio", lastActive: "Just now" }
-    ]);
+    const parsedTreasurers = savedTreasurers ? JSON.parse(savedTreasurers) : null;
+    setTreasurers(parsedTreasurers && parsedTreasurers.length > 0 ? parsedTreasurers : defaultTreasurers);
 
     const savedCustomers = localStorage.getItem("kroombox_admin_customers");
-    setCustomers(savedCustomers ? JSON.parse(savedCustomers) : [
+    const parsedCustomers = savedCustomers ? JSON.parse(savedCustomers) : null;
+    setCustomers(parsedCustomers && parsedCustomers.length > 0 ? parsedCustomers : [
       { id_pelanggan: "CUST-001", nama_pelanggan: "Budi Dummy", no_whatsapp: "08123456789", paket_hosting: "Pro Hosting", nominal_tagihan: 250000, tanggal_jatuh_tempo: "2026-06-15" }
     ]);
 
@@ -186,11 +200,11 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     syncData();
   }, [token]);
 
-  // Save local data when offline states change
+  // Save local data when offline states change — don't save empty arrays
   useEffect(() => {
     if (isOffline) {
-      localStorage.setItem("kroombox_admin_treasurers", JSON.stringify(treasurers));
-      localStorage.setItem("kroombox_admin_customers", JSON.stringify(customers));
+      if (treasurers.length > 0) localStorage.setItem("kroombox_admin_treasurers", JSON.stringify(treasurers));
+      if (customers.length > 0) localStorage.setItem("kroombox_admin_customers", JSON.stringify(customers));
       localStorage.setItem("kroombox_admin_settings", JSON.stringify(appSettings));
     }
   }, [treasurers, customers, appSettings, isOffline]);
@@ -509,24 +523,98 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     reader.readAsText(file);
   };
 
+  // Helper: parse local date string "YYYY-MM-DD" to Date object safely
+  const parseLocalDate = (dateStr: string) => {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // --- STATS COMPUTATIONS ---
   const totalTrxVolume = transactions.reduce((acc, curr) => acc + (curr.jumlah * curr.kuantitas), 0);
-  const incomeVolume = transactions.filter(t => t.tipe === "Pemasukan").reduce((acc, curr) => acc + (curr.jumlah * curr.kuantitas), 0);
-  const expenseVolume = transactions.filter(t => t.tipe === "Pengeluaran").reduce((acc, curr) => acc + (curr.jumlah * curr.kuantitas), 0);
+  const incomeVolume = transactions.filter(t => t.tipe === "Debit").reduce((acc, curr) => acc + (curr.jumlah * curr.kuantitas), 0);
+  const expenseVolume = transactions.filter(t => t.tipe === "Kredit").reduce((acc, curr) => acc + (curr.jumlah * curr.kuantitas), 0);
 
-  // Group by date for visual trends
-  const chartData = Array.from(
-    transactions.reduce((acc, t) => {
-      const date = t.tanggal;
-      if (!acc.has(date)) {
-        acc.set(date, { name: date, Pemasukan: 0, Pengeluaran: 0 });
-      }
-      const data = acc.get(date)!;
-      if (t.tipe === "Pemasukan") data.Pemasukan += (t.jumlah * t.kuantitas);
-      else data.Pengeluaran += (t.jumlah * t.kuantitas);
-      return acc;
-    }, new Map<string, { name: string; Pemasukan: number; Pengeluaran: number }>())
-  ).map(([_, val]) => val).sort((a, b) => a.name.localeCompare(b.name)).slice(-7);
+  const dailyData = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    const name = d.toLocaleDateString("id-ID", { weekday: "short" });
+
+    const debit = transactions
+      .filter(t => t.tanggal === dateStr && t.tipe === "Debit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    const kredit = transactions
+      .filter(t => t.tanggal === dateStr && t.tipe === "Kredit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+    return {
+      name,
+      Pemasukan: debit,
+      Pengeluaran: kredit,
+      trend: debit - kredit
+    };
+  });
+
+  const weeklyData = Array.from({ length: 4 }).map((_, i) => {
+    const end = new Date();
+    end.setDate(end.getDate() - (3 - i) * 7);
+    const start = new Date();
+    start.setDate(start.getDate() - (3 - i) * 7 - 6);
+    
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const inRangeTrx = transactions.filter(t => {
+      const tDate = parseLocalDate(t.tanggal);
+      return tDate >= start && tDate <= end;
+    });
+
+    const debit = inRangeTrx
+      .filter(t => t.tipe === "Debit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    const kredit = inRangeTrx
+      .filter(t => t.tipe === "Kredit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+    return {
+      name: `W${i + 1}`,
+      Pemasukan: debit,
+      Pengeluaran: kredit,
+      trend: debit - kredit
+    };
+  });
+
+  const monthlyData = Array.from({ length: 5 }).map((_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (4 - i));
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const name = d.toLocaleDateString("id-ID", { month: "short" });
+
+    const inRangeTrx = transactions.filter(t => {
+      const tDate = parseLocalDate(t.tanggal);
+      return tDate.getFullYear() === year && tDate.getMonth() === month;
+    });
+
+    const debit = inRangeTrx
+      .filter(t => t.tipe === "Debit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    const kredit = inRangeTrx
+      .filter(t => t.tipe === "Kredit")
+      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+
+    return {
+      name,
+      Pemasukan: debit,
+      Pengeluaran: kredit,
+      trend: debit - kredit
+    };
+  });
+
+  const chartData = timeframe === "Harian" ? dailyData : timeframe === "Mingguan" ? weeklyData : monthlyData;
 
   return {
     activeMenu,
@@ -573,6 +661,8 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     incomeVolume,
     expenseVolume,
     chartData,
+    timeframe,
+    setTimeframe,
     profile,
     onLogout,
     isOffline,

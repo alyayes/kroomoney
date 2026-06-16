@@ -86,10 +86,8 @@ export default function ForgotPassword({
       >
         {/* Logo Section */}
         <div className="flex items-center gap-2.5 mb-20">
-          <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/10">
-            <Wallet className="w-6 h-6 text-emerald-400" />
-          </div>
-          <span className="text-2xl font-black tracking-tighter text-slate-900 leading-none">KroomBox</span>
+          <img src="/logo.png" alt="Kroomoney Logo" className="w-10 h-auto object-contain drop-shadow-sm mix-blend-multiply" />
+          <span className="text-2xl font-black tracking-tighter text-slate-900 leading-none">KROOMONEY</span>
         </div>
 
         {/* Form Container */}

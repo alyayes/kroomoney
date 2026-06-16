@@ -1,14 +1,15 @@
 import InvoiceModel from '../models/invoiceModel.js';
 import TransactionModel from '../models/transactionModel.js';
 import ReceiptModel from '../models/receiptModel.js';
+import AuditLogModel from '../models/auditLogModel.js';
+import CashBookModel from '../models/cashBookModel.js';
 import { pool } from '../config/db.js';
 import { generateInvoicePdf, getInvoicePreviewHtml } from '../services/pdfService.js';
 import { sendEmail } from '../services/emailService.js';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import ExtTransactionModel from '../models/extTransactionModel.js';
-import { onInvoiceGenerated, onTransactionPaid } from '../services/callbackService.js';
+import { onInvoiceGenerated, onTransactionPaid, onTransactionCancelled } from '../services/callbackService.js';
 
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -137,10 +138,9 @@ export const generateInvoice = async (req, res) => {
     await logAudit(req, `Menerbitkan Invoice ${nomor_invoice} dari Transaksi #${transaksiId}`);
 
     // Check if API transaction and trigger callback
-    if (trx.source_type === 'api' && trx.ext_transaction_id) {
+    if (trx.source_type === 'api' && trx.external_transaction_id) {
       try {
-        await ExtTransactionModel.updateStatus(trx.ext_transaction_id, 'invoice_sent');
-        await onInvoiceGenerated(trx.ext_transaction_id, nomor_invoice, total, tanggalJatuhTempo);
+        await onInvoiceGenerated(trx.id, nomor_invoice, total, tanggalJatuhTempo);
       } catch (cbErr) {
         console.error('Callback trigger error on generate invoice:', cbErr.message);
       }
@@ -289,11 +289,12 @@ export const updateInvoiceStatus = async (req, res) => {
     });
 
     // Auto-generate kwitansi bila dibayar
+    let receiptId = null;
     if (status === 'dibayar') {
       const existingReceipt = await ReceiptModel.findByInvoiceId(id);
       if (!existingReceipt) {
         const [userRow] = await pool.query('SELECT nama_lengkap, tanda_tangan FROM users WHERE id = ?', [req.user.id]);
-        const { nomor_kwitansi, insertId: receiptId } = await ReceiptModel.create({
+        const { nomor_kwitansi, insertId } = await ReceiptModel.create({
           invoice_id: parseInt(id),
           pelanggan_id: inv.pelanggan_id || null,
           nama_manual: inv.nama_manual || null,
@@ -303,6 +304,7 @@ export const updateInvoiceStatus = async (req, res) => {
           diterima_oleh: userRow[0]?.nama_lengkap || 'Bendahara',
           created_by: req.user.id,
         });
+        receiptId = insertId;
         // Generate kwitansi PDF
         try {
           const receipt = await ReceiptModel.findById(receiptId);
@@ -313,22 +315,33 @@ export const updateInvoiceStatus = async (req, res) => {
           console.error('Kwitansi PDF warning:', pdfErr.message);
         }
         await logAudit(req, `Auto-generate Kwitansi ${nomor_kwitansi} dari Invoice ${inv.nomor_invoice}`);
+        
+        // Auto-create Cash Book entry for income
+        await CashBookModel.create({
+          type: 'income',
+          transaction_id: inv.transaksi_id,
+          invoice_id: parseInt(id),
+          receipt_id: receiptId,
+          amount: inv.total,
+          category: 'hosting',
+          description: `Income from Invoice ${inv.nomor_invoice}`,
+          entry_date: new Date().toISOString().split('T')[0],
+          created_by: req.user.id
+        });
       }
     }
 
     // Trigger callbacks for API transactions if paid or cancelled
     try {
       const trx = await TransactionModel.findById(inv.transaksi_id);
-      if (trx && trx.source_type === 'api' && trx.ext_transaction_id) {
+      if (trx && trx.source_type === 'api' && trx.external_transaction_id) {
         if (status === 'dibayar') {
-          await ExtTransactionModel.updateStatus(trx.ext_transaction_id, 'paid');
           const receipt = await ReceiptModel.findByInvoiceId(id);
           if (receipt) {
-            await onTransactionPaid(trx.ext_transaction_id, receipt.nomor_kwitansi);
+            await onTransactionPaid(trx.id, receipt.nomor_kwitansi);
           }
         } else if (status === 'dibatalkan') {
-          await ExtTransactionModel.updateStatus(trx.ext_transaction_id, 'cancelled');
-          await onTransactionCancelled(trx.ext_transaction_id, 'Invoice cancelled by administrator');
+          await onTransactionCancelled(trx.id, 'Invoice cancelled by administrator');
         }
       }
     } catch (cbErr) {
@@ -391,7 +404,10 @@ import { generateReceiptPdf } from '../services/pdfService.js';
 async function logAudit(req, aktivitas) {
   try {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-    await pool.query('INSERT INTO user_audit_trails (user_id, aktivitas, ip_address) VALUES (?, ?, ?)',
-      [req.user.id, aktivitas, ip]);
+    await AuditLogModel.create({
+      user_id: req.user.id,
+      action: aktivitas,
+      ip_address: ip
+    });
   } catch {}
 }

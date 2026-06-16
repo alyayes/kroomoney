@@ -40,12 +40,10 @@ export default function SidebarUser({
     <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0 shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Sidebar Header */}
       <div className="h-20 flex items-center px-6 gap-3 border-b border-slate-50">
-        <div className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-1.5 shadow-sm">
-          <div className="bg-blue-900 w-full h-full rounded-md flex items-center justify-center">
-            <Wallet className="w-4 h-4 text-white" />
-          </div>
+        <div className="w-10 h-10 flex items-center justify-center">
+          <img src="/logo.png" alt="Kroomoney Logo" className="w-full h-full object-contain drop-shadow-sm mix-blend-multiply" />
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-blue-900">KroomBox</h1>
+        <h1 className="text-xl font-bold tracking-tight text-blue-900">KROOMONEY</h1>
       </div>
 
       {/* Sidebar Menu */}

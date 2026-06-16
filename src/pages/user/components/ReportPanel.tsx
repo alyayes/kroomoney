@@ -173,7 +173,7 @@ export default function ReportPanel({
           <h2 className="text-2xl font-bold">Buku Besar / Rincian Laporan Kas</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[1100px]">
             <thead>
               <tr className="bg-slate-50/50 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
                 <th className="px-6 py-5">ID</th>

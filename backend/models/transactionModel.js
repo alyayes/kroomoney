@@ -1,29 +1,98 @@
 import { pool } from '../config/db.js';
 
 class TransactionModel {
+  // Helper to construct select query with aliases for backward compatibility
+  static get selectFields() {
+    return `
+      t.id,
+      t.customer_id AS pelanggan_id,
+      t.nama_manual,
+      t.no_whatsapp_manual,
+      t.source_type,
+      t.external_transaction_id,
+      t.api_client_id,
+      t.service_name,
+      t.description AS notes,
+      t.amount AS nominal_transfer,
+      t.quantity AS kuantitas,
+      t.due_date AS tanggal_bayar,
+      t.payment_status AS status_konfirmasi,
+      t.document_status AS status_dokumen,
+      t.transaction_type AS tipe_transaksi,
+      t.include_signature AS sertakan_tanda_tangan,
+      t.confirmed_by AS dikonfirmasi_oleh,
+      t.notes AS internal_notes,
+      t.raw_payload,
+      t.callback_sent_at,
+      t.created_at,
+      t.updated_at
+    `;
+  }
+
   // Get all transactions joined with customer details
   static async findAll() {
     const [rows] = await pool.query(
-      `SELECT t.id, t.pelanggan_id, t.nama_manual, t.no_whatsapp_manual, t.nominal_transfer, t.kuantitas, t.tanggal_bayar, t.status_konfirmasi, t.status_dokumen, t.sertakan_tanda_tangan, t.tipe_transaksi, t.dikonfirmasi_oleh, t.notes, t.created_at,
-              c.nama_pelanggan, c.no_whatsapp, c.paket_hosting
-       FROM transaksi t
-       LEFT JOIN master_customers c ON t.pelanggan_id = c.id_pelanggan
+      `SELECT ${this.selectFields},
+              c.name AS nama_pelanggan, 
+              c.phone AS no_whatsapp, 
+              c.hosting_package AS paket_hosting,
+              c.customer_code AS id_pelanggan_code
+       FROM transactions t
+       LEFT JOIN customers c ON t.customer_id = c.id
+       WHERE t.deleted_at IS NULL
        ORDER BY t.created_at DESC`
     );
-    return rows;
+    // Post-process rows if necessary to map enum values
+    return rows.map(r => {
+      if (r.status_konfirmasi === 'pending') r.status_konfirmasi = 'pending';
+      else if (r.status_konfirmasi === 'lunas') r.status_konfirmasi = 'lunas';
+      // Adjust boolean back to numeric if required by controllers
+      r.sertakan_tanda_tangan = r.sertakan_tanda_tangan ? 1 : 0;
+      return r;
+    });
   }
 
   // Find transaction by ID
   static async findById(id) {
-    const [rows] = await pool.query('SELECT * FROM transaksi WHERE id = ?', [id]);
-    return rows[0] || null;
+    const [rows] = await pool.query(
+      `SELECT ${this.selectFields} 
+       FROM transactions t 
+       WHERE t.id = ? AND t.deleted_at IS NULL`,
+      [id]
+    );
+    if (!rows[0]) return null;
+    const r = rows[0];
+    r.sertakan_tanda_tangan = r.sertakan_tanda_tangan ? 1 : 0;
+    return r;
+  }
+
+  // Find transaction by External ID
+  static async findByExternalId(externalId, apiClientId) {
+    const [rows] = await pool.query(
+      `SELECT ${this.selectFields} 
+       FROM transactions t 
+       WHERE t.external_transaction_id = ? AND t.api_client_id = ? AND t.deleted_at IS NULL`,
+      [externalId, apiClientId]
+    );
+    if (!rows[0]) return null;
+    const r = rows[0];
+    r.sertakan_tanda_tangan = r.sertakan_tanda_tangan ? 1 : 0;
+    return r;
   }
 
   // Create a new transaction record
-  static async create({ pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh, source_type, ext_transaction_id }) {
+  static async create({ pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh, source_type, ext_transaction_id, api_client_id, service_name }) {
+    const paymentStatus = status_konfirmasi === 'lunas' ? 'lunas' : 'pending';
+    const documentStatus = status_dokumen ? status_dokumen.toLowerCase() : 'draft';
+    const transactionType = tipe_transaksi ? tipe_transaksi.toLowerCase() : 'pemasukan';
+
     const [result] = await pool.query(
-      `INSERT INTO transaksi (pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh, source_type, ext_transaction_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (
+        customer_id, nama_manual, no_whatsapp_manual, amount, quantity, 
+        due_date, payment_status, document_status, include_signature, 
+        transaction_type, description, confirmed_by, source_type, 
+        external_transaction_id, api_client_id, service_name
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         pelanggan_id || null,
         nama_manual || null,
@@ -31,38 +100,47 @@ class TransactionModel {
         nominal_transfer,
         kuantitas || 1,
         tanggal_bayar,
-        status_konfirmasi,
-        status_dokumen || 'Draft',
+        paymentStatus,
+        documentStatus === 'draft' || documentStatus === 'diproses' || documentStatus === 'disetujui' ? documentStatus : 'draft',
         sertakan_tanda_tangan ? 1 : 0,
-        tipe_transaksi || 'Pemasukan',
+        transactionType === 'pemasukan' || transactionType === 'pengeluaran' ? transactionType : 'pemasukan',
         notes || '',
         dikonfirmasi_oleh || null,
         source_type || 'manual',
-        ext_transaction_id || null
+        ext_transaction_id || null,
+        api_client_id || null,
+        service_name || null
       ]
     );
     return result.insertId;
   }
 
-  // Approve a transaction (set status_konfirmasi = 'lunas')
+  // Approve a transaction
   static async approve(id, dikonfirmasi_oleh) {
     await pool.query(
-      'UPDATE transaksi SET status_konfirmasi = "lunas", dikonfirmasi_oleh = ? WHERE id = ?',
+      'UPDATE transactions SET payment_status = "lunas", confirmed_by = ? WHERE id = ?',
       [dikonfirmasi_oleh, id]
     );
   }
 
-  // Delete transaction record
+  // Soft Delete transaction record
   static async delete(id) {
-    await pool.query('DELETE FROM transaksi WHERE id = ?', [id]);
+    await pool.query('UPDATE transactions SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
   }
 
   // Update transaction record
-  static async update(id, { pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh, source_type, ext_transaction_id }) {
+  static async update(id, { pelanggan_id, nama_manual, no_whatsapp_manual, nominal_transfer, kuantitas, tanggal_bayar, status_konfirmasi, status_dokumen, sertakan_tanda_tangan, tipe_transaksi, notes, dikonfirmasi_oleh, source_type, ext_transaction_id, api_client_id, service_name }) {
+    const paymentStatus = status_konfirmasi === 'lunas' ? 'lunas' : 'pending';
+    const documentStatus = status_dokumen ? status_dokumen.toLowerCase() : 'draft';
+    const transactionType = tipe_transaksi ? tipe_transaksi.toLowerCase() : 'pemasukan';
+
     await pool.query(
-      `UPDATE transaksi 
-       SET pelanggan_id = ?, nama_manual = ?, no_whatsapp_manual = ?, nominal_transfer = ?, kuantitas = ?, tanggal_bayar = ?, status_konfirmasi = ?, status_dokumen = ?, sertakan_tanda_tangan = ?, tipe_transaksi = ?, notes = ?, dikonfirmasi_oleh = ?, source_type = ?, ext_transaction_id = ?
-       WHERE id = ?`,
+      `UPDATE transactions 
+       SET customer_id = ?, nama_manual = ?, no_whatsapp_manual = ?, amount = ?, quantity = ?, 
+           due_date = ?, payment_status = ?, document_status = ?, include_signature = ?, 
+           transaction_type = ?, description = ?, confirmed_by = ?, source_type = ?, 
+           external_transaction_id = ?, api_client_id = ?, service_name = ?
+       WHERE id = ? AND deleted_at IS NULL`,
       [
         pelanggan_id || null,
         nama_manual || null,
@@ -70,36 +148,19 @@ class TransactionModel {
         nominal_transfer,
         kuantitas || 1,
         tanggal_bayar,
-        status_konfirmasi,
-        status_dokumen || 'Draft',
+        paymentStatus,
+        documentStatus === 'draft' || documentStatus === 'diproses' || documentStatus === 'disetujui' ? documentStatus : 'draft',
         sertakan_tanda_tangan ? 1 : 0,
-        tipe_transaksi,
+        transactionType === 'pemasukan' || transactionType === 'pengeluaran' ? transactionType : 'pemasukan',
         notes || '',
         dikonfirmasi_oleh || null,
         source_type || 'manual',
         ext_transaction_id || null,
+        api_client_id || null,
+        service_name || null,
         id
       ]
     );
-  }
-
-  // Write audit trail log
-  static async createAuditLog(user_id, aktivitas, ip_address) {
-    await pool.query(
-      'INSERT INTO user_audit_trails (user_id, aktivitas, ip_address) VALUES (?, ?, ?)',
-      [user_id, aktivitas, ip_address]
-    );
-  }
-
-  // Get audit logs joined with user details
-  static async findAllAuditLogs() {
-    const [rows] = await pool.query(
-      `SELECT a.id, a.aktivitas, a.ip_address, a.created_at, u.nama_lengkap AS user 
-       FROM user_audit_trails a 
-       JOIN users u ON a.user_id = u.id 
-       ORDER BY a.created_at DESC`
-    );
-    return rows;
   }
 }
 
