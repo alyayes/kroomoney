@@ -319,13 +319,17 @@ export function useUserDashboard({
     };
 
     try {
+      let finalTrx = newTrx;
       if (token && token !== "offline-token-session") {
-        await apiRequest("/transactions", {
+        const res = await apiRequest("/transactions", {
           method: "POST",
           body: JSON.stringify(newTrx)
         });
+        if (res && res.data) {
+          finalTrx = res.data;
+        }
       }
-      setTransactions(prev => [newTrx, ...prev]);
+      setTransactions(prev => [finalTrx, ...prev]);
       setNotification({ message: "Transaksi berhasil ditambahkan!", type: "success" });
       setForm({
         ...INITIAL_FORM_STATE,
@@ -418,13 +422,17 @@ export function useUserDashboard({
     };
 
     try {
+      let finalTrx = updatedTrx;
       if (token && token !== "offline-token-session") {
-        await apiRequest(`/transactions/${editingTrxId}`, {
+        const res = await apiRequest(`/transactions/${editingTrxId}`, {
           method: "PUT",
           body: JSON.stringify(updatedTrx)
         });
+        if (res && res.data) {
+          finalTrx = res.data;
+        }
       }
-      setTransactions(prev => prev.map(t => t.id === editingTrxId ? updatedTrx : t));
+      setTransactions(prev => prev.map(t => t.id === editingTrxId ? finalTrx : t));
       setNotification({ message: "Transaksi berhasil diperbarui!", type: "success" });
       setIsEditModalOpen(false);
       setEditingTrxId(null);
@@ -758,19 +766,43 @@ export function useUserDashboard({
     }, new Map<string, { name: string; Debit: number; Kredit: number }>())
   ).map(([_, val]) => val).slice(-7);
 
-  const exportToExcel = () => {
-    if (transactions.length === 0) {
+  const exportToExcel = (type?: "pemasukan" | "pengeluaran" | "keseluruhan" | React.MouseEvent) => {
+    let mode: "pemasukan" | "pengeluaran" | "keseluruhan" = "keseluruhan";
+
+    if (type === "pemasukan" || type === "pengeluaran" || type === "keseluruhan") {
+      mode = type;
+    } else if (activeMenu === "Data Debit") {
+      mode = "pemasukan";
+    } else if (activeMenu === "Data Kredit") {
+      mode = "pengeluaran";
+    } else if (activeMenu === "Laporan") {
+      mode = "keseluruhan";
+    }
+
+    let filteredList = [...transactions];
+    if (mode === "pemasukan") {
+      filteredList = filteredList.filter(t => t.tipe === "Debit");
+    } else if (mode === "pengeluaran") {
+      filteredList = filteredList.filter(t => t.tipe === "Kredit");
+    }
+
+    if (filteredList.length === 0) {
       setNotification({ message: "Tidak ada data untuk dieksport", type: "error" });
       return;
     }
 
     // Sort chronologically oldest first for financial running balance
-    const sortedTrx = [...transactions].sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
+    const sortedTrx = filteredList.sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
 
     let runningBalance = 0;
+    let sumDebit = 0;
+    let sumCredit = 0;
+
     const dataToExport = sortedTrx.map((t, index) => {
       const debit = t.tipe === "Debit" ? t.jumlah * t.kuantitas : 0;
       const credit = t.tipe === "Kredit" ? t.jumlah * t.kuantitas : 0;
+      sumDebit += debit;
+      sumCredit += credit;
       runningBalance += (debit - credit);
 
       return {
@@ -793,17 +825,65 @@ export function useUserDashboard({
       'ID Transaksi': '' as any,
       'Keterangan / Deskripsi': 'Akumulasi Kas Perusahaan' as any,
       'Kontak/WhatsApp': '' as any,
-      'Debit (Masuk)': totalIncome as any,
-      'Kredit (Keluar)': totalExpense as any,
-      'Saldo Akhir (Running Balance)': (totalIncome - totalExpense) as any,
+      'Debit (Masuk)': sumDebit as any,
+      'Kredit (Keluar)': sumCredit as any,
+      'Saldo Akhir (Running Balance)': runningBalance as any,
       'Status': '' as any
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const printDate = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+
+    let sheetTitle = "";
+    let fileName = "";
+    let sheetName = "";
+
+    if (mode === "pemasukan") {
+      sheetTitle = "LAPORAN PEMASUKAN KAS (DEBIT) - KROOMBOX";
+      fileName = `Laporan_Pemasukan_KroomBox_${new Date().toISOString().split('T')[0]}.xlsx`;
+      sheetName = "Laporan Pemasukan";
+    } else if (mode === "pengeluaran") {
+      sheetTitle = "LAPORAN PENGELUARAN KAS (KREDIT) - KROOMBOX";
+      fileName = `Laporan_Pengeluaran_KroomBox_${new Date().toISOString().split('T')[0]}.xlsx`;
+      sheetName = "Laporan Pengeluaran";
+    } else {
+      sheetTitle = "LAPORAN KEUANGAN PERUSAHAAN (BUKU BESAR) - KROOMBOX";
+      fileName = `Laporan_Keuangan_KroomBox_${new Date().toISOString().split('T')[0]}.xlsx`;
+      sheetName = "Laporan Keuangan";
+    }
+
+    const titleAOA = [
+      [sheetTitle],
+      [`Tanggal Cetak: ${printDate}`],
+      [], // empty row for spacing
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(titleAOA);
+    XLSX.utils.sheet_add_json(worksheet, dataToExport, { origin: "A4" });
+
+    // Set columns width for a beautiful premium design
+    worksheet["!cols"] = [
+      { wch: 6 },   // No
+      { wch: 15 },  // Tanggal
+      { wch: 15 },  // ID Transaksi
+      { wch: 35 },  // Keterangan / Deskripsi
+      { wch: 18 },  // Kontak/WhatsApp
+      { wch: 18 },  // Debit (Masuk)
+      { wch: 18 },  // Kredit (Keluar)
+      { wch: 25 },  // Saldo Akhir (Running Balance)
+      { wch: 15 }   // Status
+    ];
+
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Kas Perusahaan");
-    XLSX.writeFile(workbook, `Laporan_Keuangan_KroomBox_${new Date().toISOString().split('T')[0]}.xlsx`);
-    setNotification({ message: "Laporan kas berhasil diekspor ke Excel!", type: "success" });
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.writeFile(workbook, fileName);
+    setNotification({ message: `Laporan kas (${mode}) berhasil diekspor ke Excel!`, type: "success" });
   };
 
   // Report Search & Filter

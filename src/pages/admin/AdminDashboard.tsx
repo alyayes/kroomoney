@@ -84,7 +84,14 @@ export default function AdminDashboard({ profile, setProfile, token, onLogout, i
     customerForm,
     setCustomerForm,
     handleSaveCustomer,
-    handleDeleteCustomer
+    handleDeleteCustomer,
+
+    // API Clients
+    apiClients,
+    createApiClient,
+    updateApiClient,
+    deactivateApiClient,
+    rotateApiClientKeys
   } = useAdminDashboard({ profile, token, onLogout, isOffline: initialIsOffline });
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: "fotoProfil" | "tandaTangan") => {
@@ -235,6 +242,11 @@ export default function AdminDashboard({ profile, setProfile, token, onLogout, i
                 fileInputRef={fileInputRef}
                 handleRestoreBackup={handleRestoreBackup}
                 triggerNotification={triggerNotification}
+                apiClients={apiClients}
+                createApiClient={createApiClient}
+                updateApiClient={updateApiClient}
+                deactivateApiClient={deactivateApiClient}
+                rotateApiClientKeys={rotateApiClientKeys}
               />
             ) : activeMenu === "My Profile" ? (
               <UserProfile

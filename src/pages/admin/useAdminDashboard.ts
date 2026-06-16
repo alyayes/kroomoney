@@ -95,6 +95,7 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
   });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [apiClients, setApiClients] = useState<any[]>([]);
   const [appSettings, setAppSettings] = useState({
     appName: "KroomBox",
     logoUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=KroomBox",
@@ -158,11 +159,54 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
           whatsappToken: dbSettings.whatsapp_token?.value || ""
         });
       }
+
+      // 6. Fetch API Clients
+      const acRes = await apiRequest("/api-clients");
+      if (acRes && acRes.data) setApiClients(acRes.data);
+
       setIsOffline(false);
     } catch (err: any) {
       setIsOffline(true);
       loadLocalData();
     }
+  };
+
+  // --- API CLIENTS CRUD ---
+  const fetchApiClients = async () => {
+    try {
+      const res = await apiRequest("/api-clients");
+      if (res && res.data) setApiClients(res.data);
+    } catch (err) {
+      console.error("Gagal fetch API clients:", err);
+    }
+  };
+
+  const createApiClient = async (payload: { client_name: string; client_code: string; callback_url: string; description: string }) => {
+    const res = await apiRequest("/api-clients", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    await fetchApiClients();
+    return res.data; // { api_key, api_secret, callback_secret }
+  };
+
+  const updateApiClient = async (id: number, payload: { client_name?: string; callback_url?: string; description?: string; is_active?: number }) => {
+    await apiRequest(`/api-clients/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    await fetchApiClients();
+  };
+
+  const deactivateApiClient = async (id: number) => {
+    await apiRequest(`/api-clients/${id}`, { method: "DELETE" });
+    await fetchApiClients();
+  };
+
+  const rotateApiClientKeys = async (id: number) => {
+    const res = await apiRequest(`/api-clients/${id}/rotate-keys`, { method: "POST" });
+    await fetchApiClients();
+    return res.data; // { api_key, api_secret }
   };
 
   const defaultTreasurers = [
@@ -676,6 +720,14 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     customerForm,
     setCustomerForm,
     handleSaveCustomer,
-    handleDeleteCustomer
+    handleDeleteCustomer,
+
+    // API Clients returns
+    apiClients,
+    fetchApiClients,
+    createApiClient,
+    updateApiClient,
+    deactivateApiClient,
+    rotateApiClientKeys
   };
 }

@@ -6,7 +6,8 @@ import {
   ShieldCheck,
   Settings,
   LogOut,
-  Activity
+  Activity,
+  ChevronRight
 } from "lucide-react";
 
 interface SidebarAdminProps {
@@ -65,23 +66,26 @@ export default function SidebarAdmin({
               <button
                 key={item.name}
                 onClick={() => setActiveMenu(item.name)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-sm font-medium border-none bg-transparent text-left cursor-pointer ${
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-sm font-bold border-none text-left cursor-pointer ${
                   isActive
-                    ? "bg-blue-50/50 text-blue-900"
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  <Icon className={`w-5 h-5 ${isActive ? "text-blue-900 opacity-100" : "text-slate-500 opacity-60"}`} />
+                <div className="flex items-center gap-4 flex-1">
+                  <Icon className={`w-5 h-5 ${isActive ? "text-white opacity-100" : "text-slate-500 opacity-60"}`} />
                   <span>{item.name}</span>
                 </div>
-                {item.badge && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    isActive ? "bg-blue-100 text-blue-900" : "bg-slate-100 text-slate-500"
-                  }`}>
-                    {item.badge}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {item.badge && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isActive ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-500"
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                  {isActive && <ChevronRight className="w-4 h-4 text-white opacity-80" />}
+                </div>
               </button>
             );
           })}

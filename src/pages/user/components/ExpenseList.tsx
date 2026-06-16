@@ -1,5 +1,5 @@
 import React from "react";
-import { Search, Download, Trash2, Edit, Package } from "lucide-react";
+import { Search, Download, Trash2, Edit, Package, FileText } from "lucide-react";
 import { motion } from "motion/react";
 import { Transaction } from "../useUserDashboard";
 
@@ -11,6 +11,8 @@ interface ExpenseListProps {
   handleEdit: (t: Transaction) => void;
   handleDelete: (id: string) => void;
   formatRupiah: (number: number) => string;
+  setSelectedReceipt: React.Dispatch<React.SetStateAction<Transaction | null>>;
+  setSelectedDocType: React.Dispatch<React.SetStateAction<"Invoice" | "Kwitansi">>;
 }
 
 export default function ExpenseList({
@@ -20,7 +22,9 @@ export default function ExpenseList({
   exportToExcel,
   handleEdit,
   handleDelete,
-  formatRupiah
+  formatRupiah,
+  setSelectedReceipt,
+  setSelectedDocType
 }: ExpenseListProps) {
   const expenses = filteredTransactions.filter(t => t.tipe === "Kredit");
 
@@ -34,7 +38,7 @@ export default function ExpenseList({
     >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
         <div>
-          <h2 className="text-xl font-black text-slate-800 tracking-tight">Data Kredit (Expense)</h2>
+          <h2 className="text-xl font-black text-slate-800 tracking-tight">Data Kredit</h2>
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mt-1">Daftar Seluruh Aliran Kas Kredit Keluar</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
@@ -91,6 +95,24 @@ export default function ExpenseList({
                     </td>
                     <td className="py-5 px-6 text-right whitespace-nowrap">
                       <div className="inline-flex items-center justify-end gap-1">
+                      {/* Invoice - selalu ada */}
+                      <button
+                        onClick={() => { setSelectedReceipt(t); setSelectedDocType("Invoice"); }}
+                        className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg border-none active:scale-95 transition-all cursor-pointer inline-flex items-center"
+                        title="Lihat Invoice"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                      {/* Kwitansi - hanya jika Lunas */}
+                      {t.statusPembayaran === "Lunas" && (
+                        <button
+                          onClick={() => { setSelectedReceipt(t); setSelectedDocType("Kwitansi"); }}
+                          className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg border-none active:scale-95 transition-all cursor-pointer inline-flex items-center"
+                          title="Lihat Kwitansi (Lunas)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(t)}
                         className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg border-none active:scale-95 transition-all cursor-pointer inline-flex items-center"

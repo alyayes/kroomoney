@@ -1,7 +1,7 @@
 import TransactionModel from '../models/transactionModel.js';
 import CustomerModel from '../models/customerModel.js';
 import AuditLogModel from '../models/auditLogModel.js';
-import { onTransactionVerified, onTransactionCancelled } from '../services/callbackService.js';
+import { onTransactionVerified, onTransactionPaid, onTransactionCancelled } from '../services/callbackService.js';
 
 // Get all transactions
 export const getAllTransactions = async (req, res) => {
@@ -17,8 +17,8 @@ export const getAllTransactions = async (req, res) => {
         id: t.id,
         trxId: `TRX-${String(t.id).padStart(4, '0')}`,
         tanggal: dateString,
-        userId: t.pelanggan_id || '',
-        tipe: t.tipe_transaksi === 'Pengeluaran' ? 'Kredit' : 'Debit',
+        userId: t.id_pelanggan_code || '',
+        tipe: (t.tipe_transaksi === 'Pengeluaran' || t.tipe_transaksi === 'pengeluaran') ? 'Kredit' : 'Debit',
         statusPembayaran: t.status_konfirmasi === 'lunas' ? 'Lunas' : t.status_konfirmasi === 'dp' ? 'DP' : t.status_konfirmasi === 'belum_lunas' ? 'Belum Lunas' : 'Pending',
         statusDokumen: t.status_dokumen || 'Draft',
         sertakanTandaTangan: t.sertakan_tanda_tangan === 1,
@@ -96,7 +96,7 @@ export const createTransaction = async (req, res) => {
     const dikonfirmasiOleh = statusKonfirmasi === 'lunas' ? req.user.id : null;
 
     const insertId = await TransactionModel.create({
-      pelanggan_id: (userId && String(userId).trim() !== "") ? userId : null,
+      pelanggan_id: customer ? customer.id : null,
       nama_manual: (userId && String(userId).trim() !== "") ? null : namaPembeli,
       no_whatsapp_manual: (userId && String(userId).trim() !== "") ? null : noTelepon,
       nominal_transfer: Number(String(jumlah).replace(/\D/g, "")),
@@ -203,9 +203,9 @@ export const updateTransaction = async (req, res) => {
     const dikonfirmasiOleh = statusKonfirmasi === 'lunas' ? req.user.id : null;
 
     await TransactionModel.update(id, {
-      pelanggan_id: (userId && String(userId).trim() !== "") ? userId : null,
-      nama_manual: (userId && String(userId).trim() !== "") ? null : namaPembeli,
-      no_whatsapp_manual: (userId && String(userId).trim() !== "") ? null : noTelepon,
+      pelanggan_id: customer ? customer.id : null,
+      nama_manual: customer ? null : namaPembeli,
+      no_whatsapp_manual: customer ? null : noTelepon,
       nominal_transfer: Number(String(jumlah).replace(/\D/g, "")),
       kuantitas: Number(kuantitas) || 1,
       tanggal_bayar: tanggal,
@@ -214,7 +214,11 @@ export const updateTransaction = async (req, res) => {
       sertakan_tanda_tangan: sertakanTandaTangan ? 1 : 0,
       tipe_transaksi: (tipe === 'Kredit' || tipe === 'Pengeluaran') ? 'Pengeluaran' : 'Pemasukan',
       notes: notes || '',
-      dikonfirmasi_oleh: dikonfirmasiOleh
+      dikonfirmasi_oleh: dikonfirmasiOleh,
+      source_type: existing.source_type,
+      ext_transaction_id: existing.external_transaction_id,
+      api_client_id: existing.api_client_id,
+      service_name: existing.service_name
     });
 
     // Log to Audit Trail
@@ -272,10 +276,12 @@ export const approveTransaction = async (req, res) => {
     const activityMsg = `Menyetujui Pembayaran Masuk ID #${id} untuk ${identifier}`;
     await AuditLogModel.create({ user_id: req.user.id, action: activityMsg, ip_address: ipAddress });
 
-    // Check if API transaction and trigger callback
+    // Check if API transaction and trigger callbacks
     if (existing.source_type === 'api' && existing.external_transaction_id) {
       try {
         await onTransactionVerified(id, req.user.nama_lengkap || req.user.email || 'Bendahara');
+        // Juga kirim callback paid agar hosting di app teman langsung aktif
+        await onTransactionPaid(id, null);
       } catch (cbErr) {
         console.error('Callback trigger error on approve:', cbErr.message);
       }

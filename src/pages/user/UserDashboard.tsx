@@ -171,7 +171,7 @@ export default function UserDashboard({
               <button className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all shadow-sm cursor-pointer">
                 <Bell className="w-5 h-5" />
               </button>
-              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center p-1.5 shadow-sm group cursor-pointer hover:border-blue-200 transition-all" onClick={() => setActiveMenu("Profil")}>
+              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center p-1.5 shadow-sm group cursor-pointer hover:border-blue-200 transition-all" onClick={() => setActiveMenu("Profile")}>
                 <div className="w-full h-full rounded-xl bg-slate-100 overflow-hidden">
                   <img src={profile.fotoProfil || "https://api.dicebear.com/7.x/avataaars/svg?seed=Finance"} alt="User" className="w-full h-full object-cover" />
                 </div>
@@ -207,7 +207,7 @@ export default function UserDashboard({
                   pctOperasionalBudget={pctOperasionalBudget}
                   pctServerBudget={pctServerBudget}
                 />
-              ) : activeMenu === "Input" ? (
+              ) : activeMenu === "Add Transaction" ? (
                 <TransactionInput
                   form={form}
                   setForm={setForm}
@@ -217,7 +217,7 @@ export default function UserDashboard({
                   handleAmountChange={handleAmountChange}
                   customers={customers}
                 />
-              ) : activeMenu === "Pemasukan" ? (
+              ) : activeMenu === "Debit Entries" ? (
                 <IncomeList
                   filteredTransactions={filteredTransactions}
                   searchTerm={searchTerm}
@@ -230,48 +230,20 @@ export default function UserDashboard({
                   setSelectedReceipt={setSelectedReceipt}
                   setSelectedDocType={setSelectedDocType}
                 />
-              ) : activeMenu === "Pengeluaran" ? (
-                <div className="space-y-4 w-full">
-                  <div className="flex bg-white p-2 rounded-2xl border border-slate-100 shadow-sm gap-2 w-max mx-auto md:mx-0">
-                    <button
-                      onClick={() => setExpenseTab("pengeluaran")}
-                      className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${expenseTab === "pengeluaran" ? "bg-blue-600 text-white shadow-md shadow-blue-600/20" : "text-slate-400 hover:bg-slate-50"}`}
-                    >
-                      Pengeluaran
-                    </button>
-                    <button
-                      onClick={() => setExpenseTab("invoice")}
-                      className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${expenseTab === "invoice" ? "bg-blue-600 text-white shadow-md shadow-blue-600/20" : "text-slate-400 hover:bg-slate-50"}`}
-                    >
-                      Invoice
-                    </button>
-                    <button
-                      onClick={() => setExpenseTab("kwitansi")}
-                      className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${expenseTab === "kwitansi" ? "bg-blue-600 text-white shadow-md shadow-blue-600/20" : "text-slate-400 hover:bg-slate-50"}`}
-                    >
-                      Kwitansi
-                    </button>
-                  </div>
-                  {expenseTab === "pengeluaran" && (
-                    <ExpenseList
-                      filteredTransactions={filteredTransactions}
-                      searchTerm={searchTerm}
-                      setSearchTerm={setSearchTerm}
-                      exportToExcel={exportToExcel}
-                      handleEdit={handleEdit}
-                      handleDelete={handleDelete}
-                      formatRupiah={formatRupiah}
-                    />
-                  )}
-                  {expenseTab === "invoice" && (
-                    <InvoicePanel formatRupiah={formatRupiah} />
-                  )}
-                  {expenseTab === "kwitansi" && (
-                    <KwitansiPanel formatRupiah={formatRupiah} />
-                  )}
-                </div>
+              ) : activeMenu === "Credit Entries" ? (
+                <ExpenseList
+                  filteredTransactions={filteredTransactions}
+                  searchTerm={searchTerm}
+                  setSearchTerm={setSearchTerm}
+                  exportToExcel={exportToExcel}
+                  handleEdit={handleEdit}
+                  handleDelete={handleDelete}
+                  formatRupiah={formatRupiah}
+                  setSelectedReceipt={setSelectedReceipt}
+                  setSelectedDocType={setSelectedDocType}
+                />
 
-              ) : activeMenu === "Pembayaran" ? (
+              ) : activeMenu === "Transactions" ? (
                 <PaymentPending
                   filteredTransactions={filteredTransactions}
                   searchTerm={searchTerm}
@@ -281,7 +253,7 @@ export default function UserDashboard({
                   setSelectedReceipt={setSelectedReceipt}
                   setSelectedDocType={setSelectedDocType}
                 />
-              ) : activeMenu === "Laporan" ? (
+              ) : activeMenu === "Financial Reports" ? (
                 <ReportPanel
                   filteredTransactions={filteredTransactions}
                   searchTerm={searchTerm}
@@ -297,7 +269,7 @@ export default function UserDashboard({
                   setSelectedReceipt={setSelectedReceipt}
                   setSelectedDocType={setSelectedDocType}
                 />
-              ) : activeMenu === "Profil" ? (
+              ) : activeMenu === "Profile" ? (
                 <UserProfile
                   profile={profile}
                   setProfile={setProfile}

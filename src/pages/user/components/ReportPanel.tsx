@@ -170,7 +170,7 @@ export default function ReportPanel({
 
       <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
         <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Buku Besar / Rincian Laporan Kas</h2>
+          <h2 className="text-2xl font-bold">Rincian Laporan Kas</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[1100px]">

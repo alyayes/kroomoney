@@ -12,6 +12,7 @@ interface InvoiceItem {
 interface InvoiceData {
   nomor_invoice: string;
   tanggal_terbit: string;
+  tanggal_jatuh_tempo?: string;
   nama_pelanggan?: string;
   nama_manual?: string;
   no_whatsapp?: string;
@@ -19,6 +20,7 @@ interface InvoiceData {
   subtotal: number;
   diskon: number;
   total: number;
+  catatan?: string;
 }
 
 interface CompanyData {

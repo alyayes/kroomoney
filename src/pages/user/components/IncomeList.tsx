@@ -40,7 +40,7 @@ export default function IncomeList({
     >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
         <div>
-          <h2 className="text-xl font-black text-slate-800 tracking-tight">Data Debit (Income)</h2>
+          <h2 className="text-xl font-black text-slate-800 tracking-tight">Data Debit</h2>
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mt-1">Daftar Seluruh Kas Debit Masuk</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
