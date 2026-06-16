@@ -96,9 +96,11 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
   const [transactions, setTransactions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [apiClients, setApiClients] = useState<any[]>([]);
+  const [callbackLogs, setCallbackLogs] = useState<any[]>([]);
+  const [callbackLogsLoading, setCallbackLogsLoading] = useState<boolean>(false);
   const [appSettings, setAppSettings] = useState({
-    appName: "KroomBox",
-    logoUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=KroomBox",
+    appName: "Kroomoney",
+    logoUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Kroomoney",
     maintenanceMode: false,
     themeAccent: "#3A7BD5",
     backupInterval: "Daily",
@@ -148,8 +150,8 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
       if (setRes && setRes.data) {
         const dbSettings = setRes.data;
         setAppSettings({
-          appName: dbSettings.app_name?.value || "KroomBox",
-          logoUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=KroomBox",
+          appName: dbSettings.app_name?.value || "Kroomoney",
+          logoUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Kroomoney",
           maintenanceMode: dbSettings.maintenance_mode?.value === "true",
           themeAccent: "#3A7BD5",
           backupInterval: dbSettings.backup_interval?.value || "Daily",
@@ -163,6 +165,9 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
       // 6. Fetch API Clients
       const acRes = await apiRequest("/api-clients");
       if (acRes && acRes.data) setApiClients(acRes.data);
+
+      // 7. Fetch Callback Logs
+      fetchCallbackLogs();
 
       setIsOffline(false);
     } catch (err: any) {
@@ -207,6 +212,35 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     const res = await apiRequest(`/api-clients/${id}/rotate-keys`, { method: "POST" });
     await fetchApiClients();
     return res.data; // { api_key, api_secret }
+  };
+
+  const fetchCallbackLogs = async () => {
+    setCallbackLogsLoading(true);
+    try {
+      const res = await apiRequest("/api-clients/callbacks/logs");
+      if (res && res.data) {
+        setCallbackLogs(res.data);
+      }
+    } catch (err) {
+      console.error("Gagal fetch callback logs:", err);
+    } finally {
+      setCallbackLogsLoading(false);
+    }
+  };
+
+  const resendCallback = async (transactionId: number, event: string) => {
+    try {
+      const res = await apiRequest("/api-clients/callbacks/resend", {
+        method: "POST",
+        body: JSON.stringify({ transactionId, event })
+      });
+      triggerNotification("Callback berhasil dikirim ulang!", "success");
+      fetchCallbackLogs();
+      return res;
+    } catch (err: any) {
+      triggerNotification(err.message || "Gagal mengirim ulang callback.", "error");
+      throw err;
+    }
   };
 
   const defaultTreasurers = [
@@ -728,6 +762,12 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     createApiClient,
     updateApiClient,
     deactivateApiClient,
-    rotateApiClientKeys
+    rotateApiClientKeys,
+
+    // Callback logs returns
+    callbackLogs,
+    callbackLogsLoading,
+    fetchCallbackLogs,
+    resendCallback
   };
 }

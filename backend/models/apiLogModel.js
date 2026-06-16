@@ -120,6 +120,35 @@ class ApiLogModel {
     }));
   }
 
+  // Get paginated outgoing callback logs joined with client info
+  static async findAllCallbacks({ client_id, limit = 50, offset = 0 } = {}) {
+    let query = `
+      SELECT l.*, 
+             l.response_status AS http_status,
+             l.request_body AS payload,
+             l.ref_transaction_id AS ext_transaction_id,
+             c.client_code, c.client_name 
+      FROM api_logs l
+      LEFT JOIN api_clients c ON l.api_client_id = c.id
+      WHERE l.log_type = 'callback'
+    `;
+    const params = [];
+
+    if (client_id) {
+      query += ' AND l.api_client_id = ?';
+      params.push(client_id);
+    }
+
+    query += ' ORDER BY l.created_at DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), parseInt(offset));
+
+    const [rows] = await pool.query(query, params);
+    return rows.map(r => ({
+      ...r,
+      payload: r.payload ? JSON.parse(r.payload) : null
+    }));
+  }
+
   // Prune old request logs
   static async pruneRequests(days = 90) {
     const [result] = await pool.query(

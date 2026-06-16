@@ -91,7 +91,11 @@ export default function AdminDashboard({ profile, setProfile, token, onLogout, i
     createApiClient,
     updateApiClient,
     deactivateApiClient,
-    rotateApiClientKeys
+    rotateApiClientKeys,
+
+    // Callback Logs
+    callbackLogs,
+    resendCallback
   } = useAdminDashboard({ profile, token, onLogout, isOffline: initialIsOffline });
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: "fotoProfil" | "tandaTangan") => {
@@ -247,6 +251,8 @@ export default function AdminDashboard({ profile, setProfile, token, onLogout, i
                 updateApiClient={updateApiClient}
                 deactivateApiClient={deactivateApiClient}
                 rotateApiClientKeys={rotateApiClientKeys}
+                callbackLogs={callbackLogs}
+                resendCallback={resendCallback}
               />
             ) : activeMenu === "My Profile" ? (
               <UserProfile

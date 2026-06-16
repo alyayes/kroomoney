@@ -40,20 +40,11 @@ export default function SidebarAdmin({
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between select-none shrink-0">
       <div>
         {/* Header & App Branding */}
-        <div className="h-20 flex items-center px-6 gap-3 border-b border-slate-50 justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex items-center justify-center">
-              <img src="/logo.png" alt="Kroomoney Logo" className="w-full h-full object-contain drop-shadow-sm mix-blend-multiply" />
-            </div>
-            <div>
-              <span className="text-xl font-bold tracking-tight text-blue-900">{appName}</span>
-            </div>
+        <div className="h-20 flex items-center px-6 gap-3 border-b border-slate-50">
+          <div className="w-10 h-10 flex items-center justify-center">
+            <img src="/logo.png" alt="Kroomoney Logo" className="w-full h-full object-contain drop-shadow-sm mix-blend-multiply" />
           </div>
-          
-          {/* ADMIN BADGE */}
-          <span className="bg-blue-50 text-blue-700 border border-blue-100 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">
-            Admin
-          </span>
+          <h1 className="text-xl font-bold tracking-tight text-blue-900 uppercase">{appName}</h1>
         </div>
 
         {/* Navigation Links */}
@@ -97,7 +88,7 @@ export default function SidebarAdmin({
         <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50/30 rounded-lg">
           <Activity className={`w-4 h-4 ${isOffline ? "text-amber-500" : "text-emerald-500"}`} />
           <span className={`text-[10px] font-bold ${isOffline ? "text-amber-500" : "text-emerald-500"} uppercase tracking-wider`}>
-            {isOffline ? "Server: Terputus" : "Server: Terhubung"}
+            {isOffline ? "Server: Offline" : "Server: Connected"}
           </span>
         </div>
 

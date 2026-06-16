@@ -45,6 +45,8 @@ interface SystemConfigProps {
   updateApiClient?: (id: number, payload: { client_name?: string; callback_url?: string; description?: string; is_active?: number }) => Promise<void>;
   deactivateApiClient?: (id: number) => Promise<void>;
   rotateApiClientKeys?: (id: number) => Promise<any>;
+  callbackLogs?: any[];
+  resendCallback?: (transactionId: number, event: string) => Promise<any>;
 }
 
 const DEFAULT_NEW_CLIENT = { client_name: "", client_code: "", callback_url: "", description: "" };
@@ -60,7 +62,9 @@ export default function SystemConfig({
   createApiClient,
   updateApiClient,
   deactivateApiClient,
-  rotateApiClientKeys
+  rotateApiClientKeys,
+  callbackLogs = [],
+  resendCallback
 }: SystemConfigProps) {
   const [showApiKey, setShowApiKey] = useState(false);
   const [isWaConnected, setIsWaConnected] = useState(true);
@@ -76,6 +80,48 @@ export default function SystemConfig({
   const [revealedKeys, setRevealedKeys] = useState<Set<number>>(new Set());
   const [rotatingId, setRotatingId] = useState<number | null>(null);
   const [rotatedKeys, setRotatedKeys] = useState<Record<number, { api_key: string; api_secret: string }>>({});
+
+  // Webhook / Callback logs local states
+  const [selectedLog, setSelectedLog] = useState<any | null>(null);
+  const [manualTrxId, setManualTrxId] = useState("");
+  const [manualEvent, setManualEvent] = useState("transaction.paid");
+  const [triggeringManual, setTriggeringManual] = useState(false);
+  const [retryingLogId, setRetryingLogId] = useState<number | null>(null);
+
+  const handleManualTrigger = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualTrxId) {
+      triggerNotification("ID Transaksi wajib diisi!", "error");
+      return;
+    }
+    if (!resendCallback) return;
+    setTriggeringManual(true);
+    try {
+      await resendCallback(parseInt(manualTrxId), manualEvent);
+      triggerNotification(`Callback ${manualEvent} berhasil dikirim!`, "success");
+      setManualTrxId("");
+    } catch (err: any) {
+      // Notification is handled inside the hook
+    } finally {
+      setTriggeringManual(false);
+    }
+  };
+
+  const handleRetryLog = async (log: any) => {
+    if (!resendCallback) return;
+    setRetryingLogId(log.id);
+    try {
+      const trxId = log.ref_transaction_id || log.ext_transaction_id;
+      // Get event type from request payload or default
+      const eventName = log.payload?.event || "transaction.paid";
+      await resendCallback(trxId, eventName);
+      triggerNotification("Retry callback berhasil dilakukan!", "success");
+    } catch (err) {
+      // Error is handled inside the hook
+    } finally {
+      setRetryingLogId(null);
+    }
+  };
 
   const handleTextChange = (field: keyof AppSettings, value: any) => {
     setAppSettings({ ...appSettings, [field]: value });
@@ -582,6 +628,158 @@ export default function SystemConfig({
         )}
       </div>
 
+      {/* ─── ROW 3: Webhook Callback Logs & Manual Trigger ─── */}
+      <div className="bg-white rounded-2xl border border-[#DBEEFF] shadow-sm overflow-hidden space-y-6 p-6">
+        <div>
+          <h4 className="text-lg font-black text-[#1E2D50] tracking-tight flex items-center gap-2">
+            <Globe className="w-5 h-5 text-[#2563EB]" /> Webhook Callback Monitor & Troubleshooting
+          </h4>
+          <p className="text-xs text-[#5A6A85] font-semibold uppercase tracking-wider mt-0.5">
+            Pantau status pengiriman webhook ke aplikasi eksternal dan trigger aktivasi hosting manual
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left: Manual Activation Trigger Form */}
+          <div className="lg:col-span-4 bg-slate-50/50 border border-slate-100 rounded-2xl p-5 space-y-4">
+            <div>
+              <h5 className="text-xs font-black uppercase text-[#1E2D50] tracking-wider">Manual Webhook Trigger</h5>
+              <p className="text-[10px] text-[#5A6A85] font-medium leading-relaxed mt-0.5">
+                Kirim callback aktivasi hosting secara manual menggunakan ID Transaksi untuk integrasi bermasalah.
+              </p>
+            </div>
+            <form onSubmit={handleManualTrigger} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase tracking-widest text-[#5A6A85] ml-1">ID Transaksi (Kroombox)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="Contoh: 15"
+                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-[#2563EB] transition-all"
+                  value={manualTrxId}
+                  onChange={e => setManualTrxId(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase tracking-widest text-[#5A6A85] ml-1">Event Type</label>
+                <select
+                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#2563EB] transition-all cursor-pointer"
+                  value={manualEvent}
+                  onChange={e => setManualEvent(e.target.value)}
+                >
+                  <option value="transaction.paid">transaction.paid (Aktivasi Layanan/Hosting)</option>
+                  <option value="transaction.verified">transaction.verified (Persetujuan Bendahara)</option>
+                  <option value="transaction.cancelled">transaction.cancelled (Pembatalan Transaksi)</option>
+                  <option value="invoice.generated">invoice.generated (Invoice Diterbitkan)</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                disabled={triggeringManual}
+                className="w-full flex items-center justify-center gap-2 bg-[#2563EB] hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer border-none disabled:opacity-60"
+              >
+                {triggeringManual ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                {triggeringManual ? "Mengirim..." : "Trigger Callback"}
+              </button>
+            </form>
+          </div>
+
+          {/* Right: Callback Delivery Logs Table */}
+          <div className="lg:col-span-8 flex flex-col space-y-4">
+            <div>
+              <h5 className="text-xs font-black uppercase text-[#1E2D50] tracking-wider">Log Pengiriman Webhook Terakhir</h5>
+              <p className="text-[10px] text-[#5A6A85] font-medium leading-relaxed mt-0.5">
+                Daftar log pengiriman keluar (POST webhook) yang dikirim ke aplikasi klien.
+              </p>
+            </div>
+
+            <div className="border border-[#DBEEFF] rounded-xl overflow-hidden bg-white max-h-[350px] overflow-y-auto custom-scrollbar">
+              {callbackLogs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-[#5A6A85]">
+                  <Globe className="w-8 h-8 text-slate-300 mb-2" />
+                  <p className="font-bold text-xs">Belum ada log callback tercatat</p>
+                  <p className="text-[10px] mt-0.5">Sistem akan mencatat log saat transaksi API diproses</p>
+                </div>
+              ) : (
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-[#DBEEFF] text-[9px] font-black uppercase text-[#5A6A85] tracking-wider sticky top-0 z-10 select-none">
+                      <th className="py-3 px-4">Waktu</th>
+                      <th className="py-3 px-4">Client</th>
+                      <th className="py-3 px-4">Event</th>
+                      <th className="py-3 px-4">HTTP</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#DBEEFF] text-xs font-semibold">
+                    {callbackLogs.map((log: any) => {
+                      const eventName = log.payload?.event || "transaction.paid";
+                      const isSuccess = log.status === "success";
+                      const isFailed = log.status === "failed";
+
+                      return (
+                        <tr 
+                          key={log.id} 
+                          className="hover:bg-slate-50/50 transition-colors cursor-pointer"
+                          onClick={() => setSelectedLog(log)}
+                        >
+                          <td className="py-3 px-4 text-[10px] text-slate-500 font-mono whitespace-nowrap">
+                            {new Date(log.created_at).toLocaleString("id-ID", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                              day: "2-digit",
+                              month: "2-digit"
+                            })}
+                          </td>
+                          <td className="py-3 px-4 font-mono font-bold text-[10px]">
+                            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase">
+                              {log.client_code || "API"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[10px] text-indigo-600 whitespace-nowrap">
+                            {eventName}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[10px]">
+                            {log.http_status ? (
+                              <span className={log.http_status >= 200 && log.http_status < 300 ? "text-emerald-600 font-black" : "text-red-500 font-black"}>
+                                {log.http_status}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-bold">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                              isSuccess ? "bg-emerald-50 text-emerald-600" :
+                              isFailed ? "bg-red-50 text-red-500" :
+                              "bg-amber-50 text-amber-600"
+                            }`}>
+                              {log.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right" onClick={e => e.stopPropagation()}>
+                            <button
+                              disabled={retryingLogId === log.id}
+                              onClick={() => handleRetryLog(log)}
+                              title="Kirim Ulang Callback"
+                              className="p-1 rounded bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-600 cursor-pointer disabled:opacity-50 transition-all"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${retryingLogId === log.id ? "animate-spin" : ""}`} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ─── Global Save Button ─── */}
       <div className="bg-slate-50 p-4 rounded-2xl border border-[#DBEEFF] flex justify-end gap-3">
         <button
@@ -730,6 +928,134 @@ export default function SystemConfig({
                     </div>
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Modal: Detail Webhook Callback Log ─── */}
+      <AnimatePresence>
+        {selectedLog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setSelectedLog(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl border border-[#DBEEFF] w-full max-w-2xl overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-5 border-b border-[#DBEEFF] bg-gradient-to-r from-[#EAF4FF] to-white flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-[#2563EB] text-white rounded-xl flex items-center justify-center">
+                    <Globe className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-[#1E2D50]">Detail Outgoing Webhook</h3>
+                    <p className="text-[10px] text-[#5A6A85] font-semibold">Inspeksi detail request & response HTTP callback</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedLog(null)} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-500 text-slate-400 flex items-center justify-center cursor-pointer border-none transition-all">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
+                {/* Meta details */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 rounded-xl p-4 border border-slate-100 text-xs">
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Client</span>
+                    <strong className="text-[#1E2D50] block truncate">{selectedLog.client_name} ({selectedLog.client_code})</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Event Type</span>
+                    <strong className="text-indigo-600 font-mono block truncate">{selectedLog.payload?.event || "transaction.paid"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Status Pengiriman</span>
+                    <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                      selectedLog.status === "success" ? "bg-emerald-50 text-emerald-600" :
+                      selectedLog.status === "failed" ? "bg-red-50 text-red-500" : "bg-amber-50 text-amber-600"
+                    }`}>
+                      {selectedLog.status}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Waktu</span>
+                    <span className="text-slate-600 font-mono block">{new Date(selectedLog.created_at).toLocaleString("id-ID")}</span>
+                  </div>
+                </div>
+
+                {/* HTTP Endpoint */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-[#5A6A85] tracking-widest ml-1">Target Callback URL</label>
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">POST</span>
+                    <code className="flex-1 text-[11px] font-mono text-[#1E2D50] break-all">{selectedLog.endpoint}</code>
+                  </div>
+                </div>
+
+                {/* Request Payload JSON */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-[#5A6A85] tracking-widest ml-1">Request Payload (JSON)</label>
+                  <pre className="bg-[#1E2D50] text-slate-100 p-4 rounded-xl text-[10px] font-mono overflow-x-auto leading-relaxed shadow-inner max-h-40 overflow-y-auto">
+                    {JSON.stringify(selectedLog.payload, null, 2)}
+                  </pre>
+                </div>
+
+                {/* Response Code & Body / Error Message */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-[#5A6A85] tracking-widest ml-1">HTTP Response</label>
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 min-h-[120px] max-h-40 overflow-y-auto">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[9px] uppercase font-bold text-slate-400">HTTP Status:</span>
+                        <span className={`text-[10px] font-mono font-black ${
+                          selectedLog.http_status >= 200 && selectedLog.http_status < 300 ? "text-emerald-600" : "text-red-500"
+                        }`}>
+                          {selectedLog.http_status || "Timeout / Connection Failed"}
+                        </span>
+                      </div>
+                      <pre className="text-[10px] font-mono text-slate-600 break-all whitespace-pre-wrap">
+                        {selectedLog.response_body || <span className="text-slate-400 italic">No response body</span>}
+                      </pre>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-red-500 tracking-widest ml-1">Error Message (Internal)</label>
+                    <div className="bg-red-50/30 border border-red-100/50 rounded-xl p-3 min-h-[120px] max-h-40 overflow-y-auto text-red-800 text-[10px] font-mono">
+                      {selectedLog.error_message ? (
+                        <p className="whitespace-pre-wrap leading-relaxed">{selectedLog.error_message}</p>
+                      ) : (
+                        <p className="text-slate-400 italic">Tidak ada error internal tercatat (Sukses)</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button onClick={() => setSelectedLog(null)} className="px-5 py-2.5 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs hover:bg-slate-200 transition-all cursor-pointer border-none">
+                    Tutup Detail
+                  </button>
+                  <button
+                    disabled={retryingLogId === selectedLog.id}
+                    onClick={() => { handleRetryLog(selectedLog); setSelectedLog(null); }}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer border-none disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${retryingLogId === selectedLog.id ? "animate-spin" : ""}`} />
+                    Kirim Ulang Sekarang
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

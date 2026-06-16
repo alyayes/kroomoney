@@ -1,4 +1,7 @@
 import ApiClientModel from '../models/apiClientModel.js';
+import ApiLogModel from '../models/apiLogModel.js';
+import { sendCallback, onTransactionVerified, onTransactionPaid, onTransactionCancelled } from '../services/callbackService.js';
+
 
 class ApiClientController {
   // Get all API clients
