@@ -37,6 +37,8 @@ interface ReportPanelProps {
   exportToExcel: () => void;
   setSelectedReceipt: React.Dispatch<React.SetStateAction<Transaction | null>>;
   setSelectedDocType: React.Dispatch<React.SetStateAction<"Invoice" | "Kwitansi">>;
+  handleDownloadDocumentPdf: (id: string, trxId: string, docType: "Invoice" | "Kwitansi") => Promise<void>;
+  downloadingId: string | null;
 }
 
 export default function ReportPanel({
@@ -52,7 +54,9 @@ export default function ReportPanel({
   terbilang,
   exportToExcel,
   setSelectedReceipt,
-  setSelectedDocType
+  setSelectedDocType,
+  handleDownloadDocumentPdf,
+  downloadingId
 }: ReportPanelProps) {
   const reportData = [
     { name: 'Debit', value: totalIncome, fill: '#2563eb' },
@@ -246,6 +250,19 @@ export default function ReportPanel({
                         title="Lihat Invoice"
                       >
                         <FileText className="w-4 h-4" />
+                      </button>
+                      {/* Download PDF button */}
+                      <button
+                        onClick={() => handleDownloadDocumentPdf(t.id, t.trxId, "Invoice")}
+                        disabled={downloadingId === t.id}
+                        className={`p-2 rounded-xl transition-all shadow-sm border-none cursor-pointer flex items-center justify-center ${
+                          downloadingId === t.id
+                            ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                            : "bg-red-50 text-red-500 hover:bg-red-600 hover:text-white"
+                        }`}
+                        title="Unduh Invoice PDF"
+                      >
+                        <Download className="w-4 h-4" />
                       </button>
                       {/* Kwitansi - hanya jika Debit dan Lunas */}
                       {t.tipe === "Debit" && (

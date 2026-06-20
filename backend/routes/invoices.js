@@ -10,6 +10,7 @@ import {
   downloadInvoicePdf,
   sendInvoiceEmail,
   sendInvoiceWa,
+  downloadInvoicePdfByTransactionId,
 } from '../controllers/invoiceController.js';
 import { verifyToken } from '../middleware/auth.js';
 
@@ -20,6 +21,7 @@ router.get('/', getAllInvoices);
 router.get('/:id', getInvoiceById);
 router.get('/:id/preview', previewInvoice);
 router.get('/:id/pdf', downloadInvoicePdf);
+router.get('/transaction/:transaksiId/pdf', downloadInvoicePdfByTransactionId);
 router.post('/generate/:transaksiId', generateInvoice);
 router.post('/:id/send-email', sendInvoiceEmail);
 router.post('/:id/send-wa', sendInvoiceWa);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Download, Trash2, FileText, Send, Eye, Package, Plus } from "lucide-react";
+import { Search, Download, FileText, Send, Eye, Package } from "lucide-react";
 import { motion } from "motion/react";
 
 interface InvoicePanelProps {
@@ -10,6 +10,7 @@ export default function InvoicePanel({ formatRupiah }: InvoicePanelProps) {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInvoices();
@@ -18,7 +19,7 @@ export default function InvoicePanel({ formatRupiah }: InvoicePanelProps) {
   const fetchInvoices = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/invoices", {
+      const res = await fetch("http://127.0.0.1:5000/api/invoices", {
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
       });
       const data = await res.json();
@@ -33,16 +34,45 @@ export default function InvoicePanel({ formatRupiah }: InvoicePanelProps) {
   };
 
   const handlePreview = (id: string) => {
-    window.open(`/api/invoices/${id}/preview?token=${localStorage.getItem("token")}`, "_blank");
+    window.open(`http://127.0.0.1:5000/api/invoices/${id}/preview?token=${localStorage.getItem("token")}`, "_blank");
   };
 
-  const handleDownloadPdf = (id: string) => {
-    window.open(`/api/invoices/${id}/pdf?token=${localStorage.getItem("token")}`, "_blank");
+  /**
+   * Download PDF menggunakan fetch + blob agar langsung ter-download
+   * tanpa membuka tab baru (menghindari popup blocker).
+   */
+  const handleDownloadPdf = async (id: string, nomorInvoice: string) => {
+    setDownloadingId(id);
+    try {
+      const res = await fetch(`http://127.0.0.1:5000/api/invoices/${id}/pdf`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.message || "Gagal mengunduh PDF.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      // Bersihkan karakter "/" dari nomor invoice untuk nama file
+      a.download = `${nomorInvoice.replace(/\//g, "-")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mengunduh PDF.");
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const handleSendWa = async (id: string) => {
     try {
-      const res = await fetch(`/api/invoices/${id}/send-wa`, {
+      const res = await fetch(`http://127.0.0.1:5000/api/invoices/${id}/send-wa`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
         body: JSON.stringify({})
@@ -64,7 +94,7 @@ export default function InvoicePanel({ formatRupiah }: InvoicePanelProps) {
     const email = prompt("Masukkan alamat email tujuan:");
     if (!email) return;
     try {
-      const res = await fetch(`/api/invoices/${id}/send-email`, {
+      const res = await fetch(`http://127.0.0.1:5000/api/invoices/${id}/send-email`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
         body: JSON.stringify({ emailTujuan: email })
@@ -153,7 +183,7 @@ export default function InvoicePanel({ formatRupiah }: InvoicePanelProps) {
                       <button onClick={() => handlePreview(inv.id)} className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg inline-flex items-center" title="Preview HTML">
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDownloadPdf(inv.id)} className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg inline-flex items-center" title="Download PDF">
+                      <button onClick={() => handleDownloadPdf(inv.id, inv.nomorInvoice)} className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg inline-flex items-center" title="Download PDF">
                         <FileText className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleSendWa(inv.id)} className="p-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg inline-flex items-center" title="Kirim WA">

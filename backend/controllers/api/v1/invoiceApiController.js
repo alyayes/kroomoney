@@ -46,7 +46,7 @@ class InvoiceApiController {
         });
       }
 
-      const subtotal = trx.nominal_transfer * trx.kuantitas;
+      const subtotal = Math.ceil(trx.nominal_transfer * trx.kuantitas);
       const total = Math.max(0, subtotal - Number(discount));
       const today = new Date().toISOString().split('T')[0];
 

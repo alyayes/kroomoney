@@ -18,7 +18,7 @@ export default function KwitansiPanel({ formatRupiah }: KwitansiPanelProps) {
   const fetchReceipts = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/receipts", {
+      const res = await fetch("http://127.0.0.1:5000/api/receipts", {
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
       });
       const data = await res.json();
@@ -33,16 +33,37 @@ export default function KwitansiPanel({ formatRupiah }: KwitansiPanelProps) {
   };
 
   const handlePreview = (id: string) => {
-    window.open(`/api/receipts/${id}/preview?token=${localStorage.getItem("token")}`, "_blank");
+    window.open(`http://127.0.0.1:5000/api/receipts/${id}/preview?token=${localStorage.getItem("token")}`, "_blank");
   };
 
-  const handleDownloadPdf = (id: string) => {
-    window.open(`/api/receipts/${id}/pdf?token=${localStorage.getItem("token")}`, "_blank");
+  const handleDownloadPdf = async (id: string, nomorKwitansi: string) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:5000/api/receipts/${id}/pdf`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.message || "Gagal mengunduh PDF.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${nomorKwitansi.replace(/\//g, "-")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mengunduh PDF.");
+    }
   };
 
   const handleSendWa = async (id: string) => {
     try {
-      const res = await fetch(`/api/receipts/${id}/send-wa`, {
+      const res = await fetch(`http://127.0.0.1:5000/api/receipts/${id}/send-wa`, {
         method: "PATCH",
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
         body: JSON.stringify({})
@@ -64,7 +85,7 @@ export default function KwitansiPanel({ formatRupiah }: KwitansiPanelProps) {
     const email = prompt("Masukkan alamat email tujuan:");
     if (!email) return;
     try {
-      const res = await fetch(`/api/receipts/${id}/send-email`, {
+      const res = await fetch(`http://127.0.0.1:5000/api/receipts/${id}/send-email`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
         body: JSON.stringify({ emailTujuan: email })
@@ -145,7 +166,7 @@ export default function KwitansiPanel({ formatRupiah }: KwitansiPanelProps) {
                       <button onClick={() => handlePreview(r.id)} className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg inline-flex items-center" title="Preview HTML">
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDownloadPdf(r.id)} className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg inline-flex items-center" title="Download PDF">
+                      <button onClick={() => handleDownloadPdf(r.id, r.nomorKwitansi)} className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg inline-flex items-center" title="Download PDF">
                         <FileText className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleSendWa(r.id)} className="p-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg inline-flex items-center" title="Kirim WA">

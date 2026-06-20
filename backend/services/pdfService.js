@@ -14,16 +14,16 @@ import fs from 'fs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STORAGE_DIR = join(__dirname, '..', 'storage');
 
-// Load logo.png as base64 for PDF rendering
-const logoPath = join(__dirname, '..', '..', 'public', 'logo.png');
+// Load logo kb.jpeg as base64 for PDF rendering
+const logoPath = join(__dirname, '..', '..', 'src', 'assests', 'logo kb.jpeg');
 let logoBase64 = '';
 try {
   if (fs.existsSync(logoPath)) {
     const logoData = fs.readFileSync(logoPath);
-    logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
+    logoBase64 = `data:image/jpeg;base64,${logoData.toString('base64')}`;
   }
 } catch (err) {
-  console.error('Error loading logo.png in pdfService:', err);
+  console.error('Error loading logo kb.jpeg in pdfService:', err);
 }
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -62,7 +62,7 @@ async function getCompanySettings() {
       address: cfg.company_address || 'Ko+Lab Hub Studio, Gd.Selaru lt.4 Universitas Telkom',
       city: cfg.company_city || 'Bandung',
       phone: cfg.company_phone || '+62-878-9000-4465',
-      email: cfg.company_email || 'kroombox@gmail.com',
+      email: cfg.company_email || 'kroombox11@gmail.com',
       website: cfg.company_website || 'kroombox.com',
       signerName: cfg.signer_name || 'Andi Ahmad N.',
       signerTitle: cfg.signer_title || 'Bendahara',
@@ -71,7 +71,7 @@ async function getCompanySettings() {
     return {
       name: 'Kroombox', address: 'Ko+Lab Hub Studio, Gd.Selaru lt.4 Universitas Telkom',
       city: 'Bandung', phone: '+62-878-9000-4465',
-      email: 'kroombox@gmail.com', website: 'kroombox.com',
+      email: 'kroombox11@gmail.com', website: 'kroombox.com',
       signerName: 'Andi Ahmad N.', signerTitle: 'Bendahara',
     };
   }
@@ -82,10 +82,10 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
   const tanggal = new Date(invoice.tanggal_terbit).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
   const customerName = invoice.nama_pelanggan || invoice.nama_manual || 'Pelanggan';
   const invNumber = invoice.nomor_invoice;
-  const invShort = invNumber.split('-').slice(1).join(''); // "2026060001"
+  
+  const printTime = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
 
   // Item rows
-  const EMPTY_ROWS = 8;
   const itemRowsHtml = items.map(item => `
     <tr>
       <td class="td-desc">
@@ -93,203 +93,384 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
         ${item.sub_deskripsi ? `<span class="item-sub">${item.sub_deskripsi}</span>` : ''}
       </td>
       <td class="td-center">${item.kuantitas}</td>
-      <td class="td-center">${formatRp(item.harga_satuan)}</td>
-      <td class="td-center">${item.diskon_persen || 0}%</td>
+      <td class="td-right">${formatRp(item.harga_satuan)}</td>
       <td class="td-right">${formatRp(item.subtotal)}</td>
     </tr>`).join('');
 
-  const emptyRowsHtml = Array(Math.max(0, EMPTY_ROWS - items.length)).fill(
-    `<tr class="empty-row"><td></td><td></td><td></td><td></td><td></td></tr>`
-  ).join('');
-
   const subtotal = items.reduce((s, i) => s + (Number(i.subtotal) || 0), 0) || invoice.subtotal || 0;
-  const total = invoice.total || subtotal;
-  const diskon = invoice.diskon || 0;
+  const diskonHtml = invoice.diskon > 0 ? `
+    <div class="s-row" style="color: #ef4444; font-weight: 700;">
+      <span style="color: #ef4444; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase;">DISKON</span>
+      <span>- ${formatRp(invoice.diskon)}</span>
+    </div>` : '';
+  const total = invoice.total !== undefined ? invoice.total : Math.max(0, subtotal - (invoice.diskon || 0));
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <style>
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A5 portrait; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: 'Helvetica Neue', Arial, Helvetica, sans-serif;
-    width: 210mm; min-height: 297mm;
-    background: #fff; color: #1a1a1a;
+    width: 148mm; height: 210mm;
+    background: #ffffff; color: #333333;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .page {
-    width: 210mm; min-height: 297mm;
-    display: flex; flex-direction: row;
-  }
-
-  /* LEFT GUTTER — rotated invoice number */
-  .gutter {
-    width: 44px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    border-right: 1px solid #f0f0f0;
-  }
-  .gutter-label {
-    font-size: 30px; font-weight: 900; color: #1a3a6b;
-    white-space: nowrap; letter-spacing: 2px;
-    writing-mode: vertical-rl; transform: rotate(180deg);
-    font-style: italic;
-  }
-
-  /* MAIN CONTENT */
-  .main {
-    flex: 1; padding: 36px 36px 28px 28px;
+    width: 148mm; height: 210mm;
+    padding: 10mm 12mm;
     display: flex; flex-direction: column;
+    justify-content: space-between;
+    background: #ffffff;
+    box-sizing: border-box;
+  }
+  .top-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  /* HEADER */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .logo-img {
+    height: 140px;
+    object-fit: contain;
+  }
+  .header-right {
+    text-align: right;
+  }
+  .invoice-title {
+    font-size: 22px;
+    font-weight: 900;
+    color: #1a1a1a;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .invoice-number {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1a3a6b;
   }
 
-  /* HEADER */
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-  .company-info { display: flex; flex-direction: column; gap: 3px; }
-  .company-name { font-size: 24px; font-weight: 900; color: #1a3a6b; }
-  .company-subtitle { font-size: 10px; font-weight: 700; color: #666; letter-spacing: 1px; margin-bottom: 5px; }
-  .company-addr { font-size: 11px; color: #555; line-height: 1.4; max-width: 320px; }
-  .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-  .logo-img { height: 45px; object-fit: contain; margin-bottom: 4px; }
-  .title-invoice { font-size: 30px; font-weight: 900; color: #1a3a6b; letter-spacing: 1.5px; line-height: 1; }
-  .invoice-num { font-size: 13px; font-weight: 700; color: #444; }
+  /* INFO COLUMNS */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    padding-top: 15px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .info-col-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .info-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .info-row {
+    display: flex;
+  }
+  .info-label {
+    width: 100px;
+    color: #64748b;
+    flex-shrink: 0;
+  }
+  .info-colon {
+    width: 12px;
+    color: #64748b;
+    flex-shrink: 0;
+  }
+  .info-value {
+    font-weight: 500;
+    color: #334155;
+  }
+  .info-value.bold {
+    font-weight: 700;
+    color: #0f172a;
+  }
 
-  .redline { height: 1.5px; background: #e05252; margin-bottom: 14px; }
+  .divider-main {
+    height: 2px;
+    background: #1a3a6b;
+    margin-top: 10px;
+  }
 
-  /* DATE / BILLING FOR */
-  .info-row { display: grid; grid-template-columns: 220px 1fr; gap: 0; margin-bottom: 16px; }
-  .info-label { font-size: 9.5px; font-weight: 700; color: #e05252; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; }
-  .info-val { font-size: 13px; font-weight: 600; color: #111; }
-  .info-sub { font-size: 10px; color: #666; margin-top: 2px; }
-  .thinline { height: 0.5px; background: #d0d0d0; margin-bottom: 18px; }
-
-  /* ITEMS TABLE */
-  table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
-  thead tr { background: #1a3a6b; }
+  /* TABLE */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+  thead tr {
+    background: #1a3a6b;
+  }
   thead th {
-    color: #fff; font-size: 10.5px; font-weight: 700;
-    padding: 9px 10px; text-align: left;
-    letter-spacing: 0.3px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #ffffff;
+    padding: 8px 10px;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  thead th:first-child {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+  }
+  thead th:last-child {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
   }
   thead th.th-center { text-align: center; }
   thead th.th-right { text-align: right; }
 
-  tbody tr { border-bottom: 1px solid #e0e0e0; }
-  .td-desc { padding: 9px 10px; font-size: 11px; color: #222; }
-  .item-name { display: block; font-weight: 500; }
-  .item-sub { display: block; font-size: 10px; color: #666; margin-top: 1px; }
-  .td-center { text-align: center; padding: 9px 10px; font-size: 11px; color: #222; }
-  .td-right { text-align: right; padding: 9px 10px; font-size: 11px; color: #222; }
-  tr.empty-row { height: 26px; }
-  tr.empty-row td { border-bottom: 1px solid #f0f0f0; }
+  tbody tr {
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .td-desc {
+    padding: 12px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .item-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1a3a6b;
+    text-decoration: none;
+  }
+  .item-sub {
+    display: block;
+    font-size: 10px;
+    color: #94a3b8;
+    margin-top: 4px;
+  }
+  .td-center {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    text-align: center;
+    padding: 12px 10px;
+    vertical-align: top;
+  }
+  .td-right {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    text-align: right;
+    padding: 12px 10px;
+    vertical-align: top;
+  }
+  tr.empty-row {
+    height: 35px;
+  }
+  tr.empty-row td {
+    border-bottom: 1px solid #f8fafc;
+  }
 
   /* SUMMARY */
-  .summary-wrap { display: flex; justify-content: flex-end; margin-top: 6px; }
-  .summary-table { width: 310px; }
-  .s-row { display: flex; justify-content: space-between; border-bottom: 0.5px solid #e8e8e8; }
-  .s-lbl { padding: 7px 10px; font-size: 11.5px; color: #555; text-align: right; flex: 1; }
-  .s-val { padding: 7px 0 7px 10px; font-size: 11.5px; color: #222; min-width: 130px; text-align: right; }
-  .s-row.amount-due { border-top: 2px solid #1a3a6b; border-bottom: none; }
-  .s-row.amount-due .s-lbl { font-weight: 700; font-size: 12.5px; color: #1a3a6b; }
-  .s-row.amount-due .s-val { font-weight: 700; font-size: 12.5px; color: #1a3a6b; }
-
-  /* FOOTER */
-  .footer {
-    margin-top: auto; padding-top: 18px;
-    border-top: 0.5px solid #ddd;
-    display: flex; gap: 24px;
-    font-size: 10px; color: #999;
+  .bottom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
   }
-  .footer strong { color: #555; font-weight: 600; }
+  .summary-wrap {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .summary-table {
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .s-row {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    color: #475569;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .s-row.total-belanja {
+    color: #1a3a6b;
+  }
+  .s-row.total-tagihan {
+    border-top: 2px solid #e2e8f0;
+    border-bottom: 2px solid #e2e8f0;
+    padding: 8px 0;
+    color: #0f172a;
+  }
+  .s-lbl-tagihan {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .s-val-tagihan {
+    font-size: 15px;
+    font-weight: 900;
+    color: #1a3a6b;
+  }
+
+  /* PAYMENT & FOOTER */
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 15px;
+  }
+  .payment-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .payment-title {
+    font-size: 9px;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .payment-val {
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+  }
+  .update-time {
+    font-size: 10px;
+    color: #94a3b8;
+    font-style: italic;
+  }
+  .footer-disclaimer {
+    border-top: 1px solid #f1f5f9;
+    padding-top: 10px;
+    font-size: 9px;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
 </style>
 </head>
 <body>
 <div class="page">
-  <div class="gutter">
-    <div class="gutter-label">Invoice ${invShort}</div>
-  </div>
-  <div class="main">
+  <div class="top-section">
     <!-- HEADER -->
     <div class="header">
-      <div class="company-info">
-        <div class="company-name">${company.name}</div>
-        <div class="company-subtitle">FINANCE & CLOUD SOLUTIONS</div>
-        <div class="company-addr">
-          ${company.address}<br/>
-          Tel: ${company.phone} | Email: ${company.email}
-        </div>
+      <div>
+        ${logoBase64 ? `<img class="logo-img" src="${logoBase64}" alt="Logo" />` : ''}
       </div>
       <div class="header-right">
-        ${logoBase64 ? `<img class="logo-img" src="${logoBase64}" alt="Logo" />` : ''}
-        <div class="title-invoice">INVOICE</div>
-        <div class="invoice-num">#${invoice.nomor_invoice}</div>
+        <div class="invoice-title">I N V O I C E</div>
+        <div class="invoice-number">${invNumber}</div>
       </div>
     </div>
 
-    <div class="redline"></div>
-
-    <!-- DATE & BILLING FOR -->
-    <div class="info-row">
+    <!-- SENDER / RECEIVER INFO -->
+    <div class="info-grid">
+      <!-- Sender -->
       <div>
-        <div class="info-label">Tanggal Terbit</div>
-        <div class="info-val">${tanggal}</div>
+        <div class="info-col-title">DITERBITKAN ATAS NAMA</div>
+        <div class="info-details">
+          <div class="info-row">
+            <span class="info-label">Penjual</span>
+            <span class="info-colon">:</span>
+            <span class="info-value bold">${company.name}</span>
+          </div>
+        </div>
       </div>
+
+      <!-- Receiver -->
       <div>
-        <div class="info-label">Ditagih Ke</div>
-        <div class="info-val">${customerName}</div>
-        ${invoice.no_whatsapp || invoice.no_wa_manual ? `<div class="info-sub">WA: ${invoice.no_whatsapp || invoice.no_wa_manual}</div>` : ''}
+        <div class="info-col-title">UNTUK</div>
+        <div class="info-details">
+          <div class="info-row">
+            <span class="info-label">Pembeli</span>
+            <span class="info-colon">:</span>
+            <span class="info-value bold" style="text-transform: uppercase;">
+              ${customerName}
+            </span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Tanggal Pembelian</span>
+            <span class="info-colon">:</span>
+            <span class="info-value bold">${tanggal}</span>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="thinline"></div>
 
-    <!-- ITEMS TABLE -->
+    <!-- DIVIDER -->
+    <div class="divider-main"></div>
+
+    <!-- TABLE -->
     <table>
       <thead>
         <tr>
-          <th>Deskripsi</th>
-          <th class="th-center">Jumlah</th>
-          <th class="th-center">Harga Satuan</th>
-          <th class="th-center">Diskon</th>
-          <th class="th-right">Total</th>
+          <th style="width: 55%;">INFO PRODUK</th>
+          <th class="th-center" style="width: 10%;">JUMLAH</th>
+          <th class="th-right" style="width: 17%;">HARGA SATUAN</th>
+          <th class="th-right" style="width: 18%;">TOTAL HARGA</th>
         </tr>
       </thead>
       <tbody>
         ${itemRowsHtml}
-        ${emptyRowsHtml}
       </tbody>
     </table>
+  </div>
 
+  <div class="bottom-section">
     <!-- SUMMARY -->
     <div class="summary-wrap">
       <div class="summary-table">
-        <div class="s-row"><div class="s-lbl">Subtotal</div><div class="s-val">${formatRp(subtotal)}</div></div>
-        <div class="s-row"><div class="s-lbl">Pajak (0%)</div><div class="s-val">Rp0</div></div>
-        <div class="s-row amount-due"><div class="s-lbl"><strong>Total Tagihan</strong></div><div class="s-val"><strong>${formatRp(total)}</strong></div></div>
-      </div>
-    </div>
-
-    <!-- TERMS & BANK DETAILS -->
-    <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #eee; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-      <div>
-        <div style="font-size: 9.5px; font-weight: 700; color: #1a3a6b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Syarat Pembayaran & Catatan</div>
-        <div style="font-size: 10px; color: #666; line-height: 1.4;">
-          ${invoice.catatan || "Silakan lakukan pembayaran sebelum tanggal jatuh tempo. Terima kasih atas kerja sama Anda!"}
+        <div class="s-row">
+          <span style="color: #94a3b8; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase;">TOTAL HARGA (${items.reduce((sum, i) => sum + (Number(i.kuantitas) || 0), 0)} BARANG)</span>
+          <span style="color: #334155;">${formatRp(subtotal)}</span>
         </div>
-      </div>
-      <div style="text-align: right;">
-        <div style="font-size: 9.5px; font-weight: 700; color: #1a3a6b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Detail Transfer Bank</div>
-        <div style="font-size: 10px; color: #666; line-height: 1.4;">
-          <strong>Bank BCA</strong><br/>
-          No. Rekening: 1234567890<br/>
-          Nama: PT Kroombox Indonesia
+        ${diskonHtml}
+        <div class="s-row total-belanja">
+          <span style="color: #94a3b8; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase;">TOTAL BELANJA</span>
+          <span style="color: #334155;">${formatRp(total)}</span>
+        </div>
+        <div class="s-row total-tagihan">
+          <span class="s-lbl-tagihan">TOTAL TAGIHAN</span>
+          <span class="s-val-tagihan">${formatRp(total)}</span>
         </div>
       </div>
     </div>
 
-    <!-- FOOTER -->
-    <div class="footer">
-      <span>Tel: <strong>${company.phone}</strong></span>
-      <span>Email: <strong>${company.email}</strong></span>
-      <span>Web: <strong>${company.website}</strong></span>
+    <!-- METADATA & DISCLAIMER -->
+    <div>
+      <div class="meta-row">
+        <div class="payment-info" style="display: flex; flex-direction: column; gap: 4px;">
+          <span class="payment-title">Hubungi Kami</span>
+          <span class="payment-val" style="display: flex; align-items: center; font-size: 11px; font-weight: 700; color: #334155; text-decoration: none;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3a6b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            kroombox11@gmail.com
+          </span>
+          <span class="payment-val" style="display: flex; align-items: center; font-size: 11px; font-weight: 700; color: #334155; text-decoration: none;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3a6b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            kroombox.com
+          </span>
+        </div>
+        <div class="update-time">
+          Dicetak pada: ${printTime}
     </div>
   </div>
 </div>
@@ -313,87 +494,93 @@ export function buildKwitansiHtml(receipt, invoice, company, tandaTangan) {
 <head>
 <meta charset="UTF-8">
 <style>
-  @page { size: A4 portrait; margin: 30mm 20mm; }
+  @page { size: A4 portrait; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: 'Times New Roman', 'Georgia', serif;
     background: #fff; color: #111;
-    display: flex; align-items: flex-start; justify-content: center;
-    padding: 0;
+    width: 210mm; height: 297mm;
+    display: flex; align-items: center; justify-content: center;
   }
   .kwt-box {
-    width: 680px;
-    border: 1.5px solid #555;
+    width: 170mm;
+    border: 2px solid #1a3a6b;
     padding: 0;
     background: #fff;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
   }
 
   /* HEADER */
   .kwt-header {
     display: flex; align-items: center;
-    padding: 14px 20px 12px 20px;
+    padding: 18px 24px;
     border-bottom: 1px solid #aaa;
   }
-  .kwt-logo { display: flex; align-items: center; gap: 6px; margin-right: auto; }
-  .kwt-logo-txt { display: flex; flex-direction: column; line-height: 1.1; }
-  .kwt-logo-kroom { font-size: 14px; font-weight: 900; color: #1a3a6b; font-family: Arial, sans-serif; }
-  .kwt-logo-box   { font-size: 14px; font-weight: 900; color: #1a3a6b; font-family: Arial, sans-serif; }
-  .kwt-logo-img { height: 35px; object-fit: contain; }
+  .kwt-logo { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+  .kwt-logo-img { height: 140px; object-fit: contain; }
   .kwt-title {
-    font-size: 15px; font-weight: 700;
-    letter-spacing: 1.5px; text-decoration: underline;
+    font-size: 18px; font-weight: 700;
+    letter-spacing: 2px; text-decoration: underline;
     text-align: center; flex: 1;
     font-family: Arial, sans-serif;
+    color: #1a3a6b;
   }
-  .kwt-header-right { margin-left: auto; width: 80px; }
+  .kwt-header-right { margin-left: auto; width: 45px; }
 
   /* META ROW */
   .kwt-meta {
     display: flex; justify-content: space-between;
-    padding: 12px 20px 10px 20px;
-    font-size: 12.5px;
-    border-bottom: 0.5px solid #ddd;
+    padding: 14px 24px;
+    font-size: 13px;
+    border-bottom: 1px solid #eee;
+    background: #fcfcfc;
   }
 
   /* BODY */
-  .kwt-body { padding: 18px 20px 14px 20px; min-height: 160px; }
-  .kwt-row { display: flex; gap: 4px; margin-bottom: 10px; font-size: 13px; }
-  .kwt-lbl { min-width: 160px; color: #333; }
-  .kwt-colon { margin-right: 6px; }
-  .kwt-val { font-weight: 700; }
-  .kwt-terbilang { font-size: 15px; font-weight: 700; }
+  .kwt-body { padding: 24px; min-height: 180px; }
+  .kwt-row { display: flex; gap: 8px; margin-bottom: 14px; font-size: 14px; line-height: 1.6; }
+  .kwt-lbl { min-width: 160px; color: #444; font-weight: 600; }
+  .kwt-colon { margin-right: 8px; color: #444; }
+  .kwt-val { font-weight: 700; border-bottom: 1px dotted #ccc; flex: 1; padding-bottom: 2px; }
+  .kwt-terbilang { font-size: 15px; font-weight: 700; font-style: italic; background: #f9f9f9; padding: 4px 8px; border-radius: 4px; border: 1px solid #eee; }
 
   /* FOOTER */
   .kwt-footer {
     display: flex; justify-content: space-between; align-items: flex-end;
-    padding: 10px 20px 16px 20px;
-    border-top: 0.5px solid #ddd;
+    padding: 16px 24px 24px 24px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+  }
+  .kwt-nominal-box {
+    border: 2px double #1a3a6b;
+    padding: 10px 20px;
+    background: #fff;
   }
   .kwt-nominal {
-    font-size: 34px; font-weight: 900; color: #111;
+    font-size: 26px; font-weight: 900; color: #1a3a6b;
     font-family: Arial, sans-serif;
     letter-spacing: -0.5px;
   }
-  .kwt-sign { text-align: center; min-width: 180px; }
-  .kwt-sign-city { font-size: 11px; color: #555; margin-bottom: 4px; }
+  .kwt-sign { text-align: center; min-width: 200px; }
+  .kwt-sign-city { font-size: 12px; color: #555; margin-bottom: 6px; }
   .kwt-sign-area {
-    position: relative; width: 180px; height: 70px;
+    position: relative; width: 200px; height: 80px;
     display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 4px;
+    margin: 0 auto 6px;
   }
   .kwt-sign-logo {
-    position: absolute; opacity: 0.18;
+    position: absolute; opacity: 0.12;
     display: flex; align-items: center; justify-content: center;
   }
-  .kwt-sign-logo-img { height: 48px; object-fit: contain; }
+  .kwt-sign-logo-img { height: 55px; object-fit: contain; }
   .kwt-sign-img {
     position: relative; z-index: 2;
-    max-height: 64px; max-width: 170px;
+    max-height: 74px; max-width: 190px;
     object-fit: contain;
   }
   .kwt-sign-name {
-    font-size: 12px; font-weight: 700; color: #111;
-    border-top: 1px solid #555; padding-top: 3px;
+    font-size: 13px; font-weight: 700; color: #111;
+    border-top: 1.5px solid #555; padding-top: 4px;
     text-align: center; font-family: Arial, sans-serif;
   }
 </style>
@@ -423,7 +610,7 @@ export function buildKwitansiHtml(receipt, invoice, company, tandaTangan) {
       <span class="kwt-val">${customerName}</span>
     </div>
     <div class="kwt-row">
-      <span class="kwt-lbl">Terbilang</span>
+      <span class="kwt-lbl">Uang Sejumlah</span>
       <span class="kwt-colon">:</span>
       <span class="kwt-val kwt-terbilang">${terbilangText}</span>
     </div>
@@ -436,7 +623,9 @@ export function buildKwitansiHtml(receipt, invoice, company, tandaTangan) {
 
   <!-- FOOTER -->
   <div class="kwt-footer">
-    <div class="kwt-nominal">Rp${nominal.toLocaleString('id-ID')},-</div>
+    <div class="kwt-nominal-box">
+      <div class="kwt-nominal">Rp${nominal.toLocaleString('id-ID')},-</div>
+    </div>
     <div class="kwt-sign">
       <div class="kwt-sign-city">${company.city}, ${tanggal}</div>
       <div class="kwt-sign-area">
@@ -445,7 +634,7 @@ export function buildKwitansiHtml(receipt, invoice, company, tandaTangan) {
           ${logoBase64 ? `<img class="kwt-sign-logo-img" src="${logoBase64}" alt="Watermark" />` : ''}
         </div>
         <!-- Signature image -->
-        ${ttdSrc ? `<img class="kwt-sign-img" src="${ttdSrc}" alt="TTD"/>` : '<div style="height:64px;"></div>'}
+        ${ttdSrc ? `<img class="kwt-sign-img" src="${ttdSrc}" alt="TTD"/>` : '<div style="height:74px;"></div>'}
       </div>
       <div class="kwt-sign-name">${company.signerName}</div>
     </div>
@@ -474,7 +663,7 @@ async function htmlToPdf(html, outputPath) {
     await page.setContent(html, { waitUntil: 'networkidle0' });
     await page.pdf({
       path: outputPath,
-      format: 'A4',
+      format: 'A5',
       printBackground: true,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
     });

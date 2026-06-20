@@ -24,6 +24,8 @@ export const getAllTransactions = async (req, res) => {
         sertakanTandaTangan: t.sertakan_tanda_tangan === 1,
         jumlah: t.nominal_transfer,
         kuantitas: t.kuantitas || 1,
+        diskon: t.diskon || 0,
+        items: t.items ? (typeof t.items === 'string' ? JSON.parse(t.items) : t.items) : [],
         namaPembeli: t.nama_pelanggan || t.nama_manual || 'Input Manual',
         noTelepon: t.no_whatsapp || t.no_whatsapp_manual || '-',
         notes: t.notes || (t.paket_hosting ? `Paket: ${t.paket_hosting}` : '')
@@ -51,6 +53,8 @@ export const createTransaction = async (req, res) => {
       userId, // pelanggan_id (optional for manual input)
       jumlah, 
       kuantitas,
+      diskon,
+      items,
       statusPembayaran, 
       statusDokumen,
       sertakanTandaTangan,
@@ -59,14 +63,14 @@ export const createTransaction = async (req, res) => {
       noTelepon,
       tipe
     } = req.body;
-
+ 
     if (!tanggal || !jumlah) {
       return res.status(400).json({
         status: 'error',
         message: 'Mohon lengkapi kolom tanggal dan nominal transaksi!'
       });
     }
-
+ 
     // If customer selected, check if valid
     let customer = null;
     if (userId && String(userId).trim() !== "") {
@@ -87,20 +91,22 @@ export const createTransaction = async (req, res) => {
         });
       }
     }
-
+ 
     let statusKonfirmasi = 'pending';
     if (statusPembayaran === 'Lunas') statusKonfirmasi = 'lunas';
     else if (statusPembayaran === 'DP') statusKonfirmasi = 'dp';
     else if (statusPembayaran === 'Belum Lunas') statusKonfirmasi = 'belum_lunas';
-
+ 
     const dikonfirmasiOleh = statusKonfirmasi === 'lunas' ? req.user.id : null;
-
+ 
     const insertId = await TransactionModel.create({
       pelanggan_id: customer ? customer.id : null,
       nama_manual: (userId && String(userId).trim() !== "") ? null : namaPembeli,
       no_whatsapp_manual: (userId && String(userId).trim() !== "") ? null : noTelepon,
       nominal_transfer: Number(String(jumlah).replace(/\D/g, "")),
       kuantitas: Number(kuantitas) || 1,
+      diskon: Number(String(diskon).replace(/\D/g, "")) || 0,
+      items: items ? (typeof items === 'string' ? JSON.parse(items) : items) : null,
       tanggal_bayar: tanggal,
       status_konfirmasi: statusKonfirmasi,
       status_dokumen: statusDokumen || 'Draft',
@@ -129,6 +135,8 @@ export const createTransaction = async (req, res) => {
         sertakanTandaTangan: !!sertakanTandaTangan,
         jumlah: Number(jumlah),
         kuantitas: Number(kuantitas) || 1,
+        diskon: Number(String(diskon).replace(/\D/g, "")) || 0,
+        items: items || [],
         namaPembeli: namaPembeli || (customer ? customer.name : 'Input Manual'),
         noTelepon: noTelepon || (customer ? customer.phone : '-'),
         notes: notes || ''
@@ -153,6 +161,8 @@ export const updateTransaction = async (req, res) => {
       userId, 
       jumlah, 
       kuantitas,
+      diskon,
+      items,
       statusPembayaran, 
       statusDokumen,
       sertakanTandaTangan,
@@ -161,7 +171,7 @@ export const updateTransaction = async (req, res) => {
       noTelepon,
       tipe
     } = req.body;
-
+ 
     const existing = await TransactionModel.findById(id);
     if (!existing) {
       return res.status(404).json({
@@ -169,14 +179,14 @@ export const updateTransaction = async (req, res) => {
         message: 'Transaksi tidak ditemukan!'
       });
     }
-
+ 
     if (!tanggal || !jumlah) {
       return res.status(400).json({
         status: 'error',
         message: 'Mohon lengkapi kolom tanggal dan nominal transaksi!'
       });
     }
-
+ 
     let customer = null;
     if (userId && String(userId).trim() !== "") {
       customer = await CustomerModel.findByCode(userId);
@@ -194,20 +204,22 @@ export const updateTransaction = async (req, res) => {
         });
       }
     }
-
+ 
     let statusKonfirmasi = 'pending';
     if (statusPembayaran === 'Lunas') statusKonfirmasi = 'lunas';
     else if (statusPembayaran === 'DP') statusKonfirmasi = 'dp';
     else if (statusPembayaran === 'Belum Lunas') statusKonfirmasi = 'belum_lunas';
-
+ 
     const dikonfirmasiOleh = statusKonfirmasi === 'lunas' ? req.user.id : null;
-
+ 
     await TransactionModel.update(id, {
       pelanggan_id: customer ? customer.id : null,
       nama_manual: customer ? null : namaPembeli,
       no_whatsapp_manual: customer ? null : noTelepon,
       nominal_transfer: Number(String(jumlah).replace(/\D/g, "")),
       kuantitas: Number(kuantitas) || 1,
+      diskon: Number(String(diskon).replace(/\D/g, "")) || 0,
+      items: items ? (typeof items === 'string' ? JSON.parse(items) : items) : null,
       tanggal_bayar: tanggal,
       status_konfirmasi: statusKonfirmasi,
       status_dokumen: statusDokumen || 'Draft',
@@ -240,6 +252,8 @@ export const updateTransaction = async (req, res) => {
         sertakanTandaTangan: !!sertakanTandaTangan,
         jumlah: Number(jumlah),
         kuantitas: Number(kuantitas) || 1,
+        diskon: Number(String(diskon).replace(/\D/g, "")) || 0,
+        items: items || [],
         namaPembeli: namaPembeli || (customer ? customer.name : 'Input Manual'),
         noTelepon: noTelepon || (customer ? customer.phone : '-'),
         notes: notes || ''

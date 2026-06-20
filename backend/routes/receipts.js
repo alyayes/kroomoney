@@ -9,6 +9,7 @@ import {
   previewReceipt,
   downloadReceiptPdf,
   sendReceiptEmail,
+  downloadReceiptPdfByTransactionId,
 } from '../controllers/receiptController.js';
 import { verifyToken } from '../middleware/auth.js';
 
@@ -19,6 +20,7 @@ router.get('/', getAllReceipts);
 router.get('/:id', getReceiptById);
 router.get('/:id/preview', previewReceipt);
 router.get('/:id/pdf', downloadReceiptPdf);
+router.get('/transaction/:transaksiId/pdf', downloadReceiptPdfByTransactionId);
 router.post('/generate/:invoiceId', generateReceipt);
 router.post('/:id/send-email', sendReceiptEmail);
 router.patch('/:id/send-wa', markReceiptSentWa);

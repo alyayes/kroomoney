@@ -36,6 +36,22 @@ export async function initializeDatabase() {
     }
     console.log('✅ MySQL Database tables initialized successfully.');
 
+    // Ensure `discount` column exists in `transactions` table
+    const [columns] = await pool.query("SHOW COLUMNS FROM transactions LIKE 'discount'");
+    if (columns.length === 0) {
+      console.log('🔄 Adding discount column to transactions table...');
+      await pool.query('ALTER TABLE transactions ADD COLUMN discount BIGINT NOT NULL DEFAULT 0 COMMENT "Nominal diskon manual" AFTER quantity');
+      console.log('✅ Added discount column to transactions table.');
+    }
+
+    // Ensure `items` column exists in `transactions` table
+    const [itemsCols] = await pool.query("SHOW COLUMNS FROM transactions LIKE 'items'");
+    if (itemsCols.length === 0) {
+      console.log('🔄 Adding items column to transactions table...');
+      await pool.query('ALTER TABLE transactions ADD COLUMN items JSON NULL COMMENT "Daftar item rincian transaksi" AFTER raw_payload');
+      console.log('✅ Added items column to transactions table.');
+    }
+
     // Seed default admin account if not exists
     const [existingAdmin] = await pool.query('SELECT * FROM users WHERE email = ?', ['admin@kroomoney.com']);
     if (existingAdmin.length === 0) {

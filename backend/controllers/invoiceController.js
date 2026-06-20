@@ -92,7 +92,17 @@ export const generateInvoice = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Tanggal jatuh tempo wajib diisi.' });
     }
 
-    const subtotal = trx.nominal_transfer * (trx.kuantitas || 1);
+    let hasItems = false;
+    if (trx.items) {
+      try {
+        const parsedItems = typeof trx.items === 'string' ? JSON.parse(trx.items) : trx.items;
+        if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+          hasItems = true;
+        }
+      } catch (err) {}
+    }
+
+    const subtotal = hasItems ? trx.nominal_transfer : Math.ceil(trx.nominal_transfer * (trx.kuantitas || 1));
     const total = Math.max(0, subtotal - (diskon || 0));
     const today = new Date().toISOString().split('T')[0];
 
@@ -111,15 +121,44 @@ export const generateInvoice = async (req, res) => {
       created_by: req.user.id,
     });
 
-    // Save invoice items — default: 1 item from transaction
-    const invoiceItems = (items && items.length > 0) ? items : [{
-      deskripsi: trx.notes || 'Pembelian Layanan',
-      sub_deskripsi: null,
-      kuantitas: trx.kuantitas || 1,
-      harga_satuan: trx.nominal_transfer,
-      diskon_persen: 0,
-      subtotal: trx.nominal_transfer * (trx.kuantitas || 1),
-    }];
+    // Save invoice items
+    let invoiceItems = (items && items.length > 0) ? items : [];
+
+    if (invoiceItems.length === 0 && trx.items) {
+      try {
+        const parsedItems = typeof trx.items === 'string' ? JSON.parse(trx.items) : trx.items;
+        if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+          invoiceItems = parsedItems.map(item => {
+            const hargaSatuan = Number(String(item.jumlah || item.harga || 0).replace(/\D/g, '')) || 0;
+            const kuantitas = Number(item.kuantitas) || 1;
+            const diskonNominal = Number(String(item.diskon || 0).replace(/\D/g, '')) || 0;
+            const subtotal = Math.max(0, (hargaSatuan * kuantitas) - diskonNominal);
+            return {
+              deskripsi: item.namaPembeli || item.deskripsi || 'Detail Layanan',
+              sub_deskripsi: item.notes || item.sub_deskripsi || null,
+              kuantitas,
+              harga_satuan: hargaSatuan,
+              diskon_persen: item.diskon_persen ? Number(item.diskon_persen) : 0,
+              subtotal
+            };
+          });
+        }
+      } catch (err) {
+        console.error("Error parsing trx.items:", err);
+      }
+    }
+
+    if (invoiceItems.length === 0) {
+      invoiceItems = [{
+        deskripsi: trx.notes || 'Pembelian Layanan',
+        sub_deskripsi: null,
+        kuantitas: trx.kuantitas || 1,
+        harga_satuan: trx.nominal_transfer / (trx.kuantitas || 1),
+        diskon_persen: 0,
+        subtotal: trx.nominal_transfer,
+      }];
+    }
+
     await InvoiceModel.createItems(insertId, invoiceItems);
 
     // Generate PDF
@@ -191,7 +230,8 @@ export const downloadInvoicePdf = async (req, res) => {
 
     const absPath = join(join(__dirname, '..'), pdfRelPath);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${inv.nomor_invoice}.pdf"`);
+    const sanitizedFilename = inv.nomor_invoice.replace(/\//g, '-');
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizedFilename}.pdf"`);
     return res.sendFile(absPath);
   } catch (err) {
     console.error('downloadInvoicePdf error:', err);
@@ -411,3 +451,119 @@ async function logAudit(req, aktivitas) {
     });
   } catch {}
 }
+
+export const downloadInvoicePdfByTransactionId = async (req, res) => {
+  try {
+    const { transaksiId } = req.params;
+
+    // Find invoice by transaction ID
+    let inv = await InvoiceModel.findByTransaksiId(transaksiId);
+    
+    // Fetch transaction
+    const trx = await TransactionModel.findById(transaksiId);
+    if (!trx) {
+      return res.status(404).json({ status: 'error', message: 'Transaksi tidak ditemukan.' });
+    }
+
+    // Determine if we need to auto-generate or heal the invoice
+    if (!inv) {
+      // Auto-generate invoice record
+      const today = new Date().toISOString().split('T')[0];
+      
+      let hasItems = false;
+      if (trx.items) {
+        try {
+          const parsedItems = typeof trx.items === 'string' ? JSON.parse(trx.items) : trx.items;
+          if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+            hasItems = true;
+          }
+        } catch (err) {}
+      }
+
+      const subtotal = hasItems ? trx.nominal_transfer : Math.ceil(trx.nominal_transfer * (trx.kuantitas || 1));
+      const total = subtotal;
+
+      const result = await InvoiceModel.create({
+        transaksi_id: transaksiId,
+        pelanggan_id: trx.pelanggan_id || null,
+        nama_manual: trx.nama_manual || null,
+        no_wa_manual: trx.no_whatsapp_manual || null,
+        subtotal,
+        diskon: 0,
+        total,
+        tanggal_terbit: today,
+        tanggal_jatuh_tempo: today, // default to today
+        catatan: 'Auto-generated for download',
+        catatan_internal: 'Auto-generated via direct download',
+        created_by: req.user.id,
+      });
+
+      inv = await InvoiceModel.findById(result.insertId);
+    }
+
+    // Now, synchronize/heal the invoice items and totals with the transaction items
+    let invoiceItems = [];
+    if (trx.items) {
+      try {
+        const parsedItems = typeof trx.items === 'string' ? JSON.parse(trx.items) : trx.items;
+        if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+          invoiceItems = parsedItems.map(item => {
+            const hargaSatuan = Number(String(item.jumlah || item.harga || 0).replace(/\D/g, '')) || 0;
+            const kuantitas = Number(item.kuantitas) || 1;
+            const diskonNominal = Number(String(item.diskon || 0).replace(/\D/g, '')) || 0;
+            const subtotal = Math.max(0, (hargaSatuan * kuantitas) - diskonNominal);
+            return {
+              deskripsi: item.namaPembeli || item.deskripsi || 'Detail Layanan',
+              sub_deskripsi: item.notes || item.sub_deskripsi || null,
+              kuantitas,
+              harga_satuan: hargaSatuan,
+              diskon_persen: item.diskon_persen ? Number(item.diskon_persen) : 0,
+              subtotal
+            };
+          });
+        }
+      } catch (err) {}
+    }
+
+    if (invoiceItems.length === 0) {
+      invoiceItems = [{
+        deskripsi: trx.notes || 'Pembelian Layanan',
+        sub_deskripsi: null,
+        kuantitas: trx.kuantitas || 1,
+        harga_satuan: trx.nominal_transfer / (trx.kuantitas || 1),
+        diskon_persen: 0,
+        subtotal: trx.nominal_transfer,
+      }];
+    }
+
+    // Perform database sync: delete old items and insert fresh mapped items
+    await pool.query('DELETE FROM invoice_items WHERE invoice_id = ?', [inv.id]);
+    await InvoiceModel.createItems(inv.id, invoiceItems);
+
+    // Update invoice subtotal, diskon, total in the database
+    const subtotal = invoiceItems.reduce((acc, curr) => acc + curr.subtotal, 0);
+    const total = Math.max(0, subtotal - (inv.diskon || 0));
+    await pool.query('UPDATE invoices SET subtotal = ?, total = ? WHERE id = ?', [subtotal, total, inv.id]);
+
+    // Update our memory copy of invoice for PDF generation
+    inv.subtotal = subtotal;
+    inv.total = total;
+
+    // Generate PDF and update pdf_path (we ALWAYS force regenerate on download to guarantee accuracy!)
+    const [userRow] = await pool.query('SELECT tanda_tangan FROM users WHERE id = ?', [inv.created_by || req.user.id]);
+    const ttd = userRow[0]?.tanda_tangan || null;
+    
+    // Generate fresh PDF
+    const pdfRelPath = await generateInvoicePdf(inv, invoiceItems, ttd);
+    await InvoiceModel.updatePdfPath(inv.id, pdfRelPath);
+
+    const absPath = join(join(__dirname, '..'), pdfRelPath);
+    res.setHeader('Content-Type', 'application/pdf');
+    const sanitizedFilename = inv.nomor_invoice.replace(/\//g, '-');
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizedFilename}.pdf"`);
+    return res.sendFile(absPath);
+  } catch (err) {
+    console.error('downloadInvoicePdfByTransactionId error:', err);
+    return res.status(500).json({ status: 'error', message: 'Gagal mengunduh PDF.' });
+  }
+};

@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Package, Search, FileText } from "lucide-react";
+import { CheckCircle2, Package, Search, FileText, Download } from "lucide-react";
 import { motion } from "motion/react";
 import { Transaction } from "../useUserDashboard";
 
@@ -11,6 +11,8 @@ interface PaymentPendingProps {
   formatRupiah: (number: number) => string;
   setSelectedReceipt: React.Dispatch<React.SetStateAction<Transaction | null>>;
   setSelectedDocType: React.Dispatch<React.SetStateAction<"Invoice" | "Kwitansi">>;
+  handleDownloadDocumentPdf: (id: string, trxId: string, docType: "Invoice" | "Kwitansi") => Promise<void>;
+  downloadingId: string | null;
 }
 
 export default function PaymentPending({
@@ -20,7 +22,9 @@ export default function PaymentPending({
   handleApprove,
   formatRupiah,
   setSelectedReceipt,
-  setSelectedDocType
+  setSelectedDocType,
+  handleDownloadDocumentPdf,
+  downloadingId
 }: PaymentPendingProps) {
   const pendingPayments = filteredTransactions.filter(
     (t) => t.statusPembayaran === "Pending"
@@ -88,6 +92,18 @@ export default function PaymentPending({
                         title="View Invoice"
                       >
                         <FileText className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDownloadDocumentPdf(t.id, t.trxId, "Invoice")}
+                        disabled={downloadingId === t.id}
+                        className={`inline-flex items-center justify-center p-2 rounded-lg border-none active:scale-95 transition-all cursor-pointer ${
+                          downloadingId === t.id
+                            ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                            : "bg-red-50 hover:bg-red-100 text-red-500"
+                        }`}
+                        title="Download Invoice PDF"
+                      >
+                        <Download className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleApprove(t.id)}

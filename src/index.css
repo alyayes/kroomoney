@@ -57,12 +57,9 @@
       print-color-adjust: exact !important;
     }
     #invoice-content {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      padding: 0 !important;
-      margin: 0 !important;
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
       box-shadow: none !important;
     }
     .print\:hidden {

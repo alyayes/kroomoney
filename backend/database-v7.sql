@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   description TEXT NULL,
   amount BIGINT NOT NULL DEFAULT 0,
   quantity INT NOT NULL DEFAULT 1,
+  discount BIGINT NOT NULL DEFAULT 0 COMMENT 'Nominal diskon manual',
   due_date DATE NOT NULL,
   payment_status ENUM('pending', 'lunas', 'dp', 'belum_lunas') NOT NULL DEFAULT 'pending',
   document_status ENUM('draft', 'diproses', 'disetujui') NOT NULL DEFAULT 'draft',
@@ -79,6 +80,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   confirmed_by INT NULL COMMENT 'Ref logis ke users.id',
   notes TEXT NULL,
   raw_payload JSON NULL COMMENT 'Payload asli dari API',
+  items JSON NULL COMMENT 'Daftar item rincian transaksi',
   callback_sent_at DATETIME NULL COMMENT 'Waktu callback terakhir dikirim',
   deleted_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -334,3 +336,21 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   INDEX idx_audit_entity (entity_type, entity_id),
   INDEX idx_audit_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Tabel untuk transaction_items
+CREATE TABLE IF NOT EXISTS transaction_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  transaction_id INT NOT NULL COMMENT 'Ref logis ke transactions.id',
+  tanggal DATE,
+  tipe VARCHAR(50),
+  status_pembayaran VARCHAR(50),
+  jumlah BIGINT DEFAULT 0,
+  kuantitas INT DEFAULT 1,
+  diskon BIGINT DEFAULT 0,
+  nama_pembeli VARCHAR(255),
+  no_telepon VARCHAR(50),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+);

@@ -1,4 +1,6 @@
 import React from "react";
+import logoKb from "../../../assests/logo kb.jpeg";
+
 
 interface InvoiceItem {
   deskripsi: string;
@@ -66,10 +68,10 @@ function formatDate(dateStr: string): string {
 const EMPTY_ROWS = 8;
 
 const DEFAULT_COMPANY: CompanyData = {
-  name: "Kroombox",
+  name: "KroomBox",
   address: "Ko+Lab Hub Studio, Gd.Selaru lt.4 Universitas Telkom",
   phone: "+62-878-9000-4465",
-  email: "kroombox@gmail.com",
+  email: "kroombox11@gmail.com",
   website: "kroombox.com",
 };
 
@@ -103,7 +105,7 @@ export default function InvoiceTemplate({ invoice, items, company = DEFAULT_COMP
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-          <img src="/logo.png" alt="Kroombox Logo" style={{ height: "50px", objectFit: "contain", marginBottom: "4px" }} />
+          <img src={logoKb} alt="Kroombox Logo" style={{ height: "120px", objectFit: "contain", marginBottom: "4px" }} />
           <div style={{ fontSize: "36px", fontWeight: 900, color: "#1a3a6b", textTransform: "uppercase", letterSpacing: "2px", lineHeight: 1 }}>INVOICE</div>
           <div style={{ fontSize: "14px", fontWeight: 700, color: "#444" }}>#{invoice.nomor_invoice}</div>
         </div>
@@ -124,9 +126,6 @@ export default function InvoiceTemplate({ invoice, items, company = DEFAULT_COMP
         <div>
           <div style={{ fontSize: "11px", fontWeight: 800, color: "#1a3a6b", textTransform: "uppercase", letterSpacing: "1px", borderBottom: "2px solid #f0f0f0", paddingBottom: "6px", marginBottom: "12px" }}>Ditagih Ke</div>
           <div style={{ fontSize: "16px", fontWeight: 800, color: "#111", marginBottom: "6px" }}>{customerName}</div>
-          {(invoice.no_whatsapp || invoice.no_wa_manual) && (
-            <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>WA: {invoice.no_whatsapp || invoice.no_wa_manual}</div>
-          )}
           <div style={{ marginTop: "16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", background: "#f8f9fa", padding: "12px", borderRadius: "6px" }}>
             <div>
               <span style={{ display: "block", fontSize: "10px", color: "#777", textTransform: "uppercase", fontWeight: 700, marginBottom: "2px" }}>Tanggal Terbit</span>
@@ -220,7 +219,7 @@ export default function InvoiceTemplate({ invoice, items, company = DEFAULT_COMP
       
       {/* Absolute bottom footer */}
       <div style={{ position: "absolute", bottom: "40px", left: "40px", right: "40px", textAlign: "center", fontSize: "10px", color: "#999" }}>
-        Kroombox • {company.address} • {company.website}
+        KroomBox • {company.address} • {company.website}
       </div>
     </div>
   );

@@ -12,6 +12,18 @@ interface Transaction {
   sertakanTandaTangan: boolean;
   jumlah: number;
   kuantitas: number;
+  diskon?: number;
+  items?: Array<{
+    tanggal: string;
+    tipe: "Debit" | "Kredit";
+    statusPembayaran: "Lunas" | "Pending" | "Belum Lunas" | "DP";
+    jumlah: string;
+    kuantitas: string;
+    diskon: string;
+    namaPembeli: string;
+    noTelepon: string;
+    notes: string;
+  }>;
   namaPembeli: string;
   noTelepon: string;
   notes: string;
@@ -27,6 +39,18 @@ interface FormState {
   sertakanTandaTangan: boolean;
   jumlah: string;
   kuantitas: string;
+  diskon: string;
+  items: Array<{
+    tanggal: string;
+    tipe: "Debit" | "Kredit";
+    statusPembayaran: "Lunas" | "Pending" | "Belum Lunas" | "DP";
+    jumlah: string;
+    kuantitas: string;
+    diskon: string;
+    namaPembeli: string;
+    noTelepon: string;
+    notes: string;
+  }>;
   namaPembeli: string;
   noTelepon: string;
   notes: string;
@@ -40,7 +64,54 @@ interface Profile {
   role?: string;
 }
 
-const generateTrxId = () => `TRX-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+export const formatDecimalInput = (value: string): string => {
+  let clean = value.replace(/[^0-9.,]/g, "");
+  
+  if (clean.includes(",")) {
+    const parts = clean.split(",");
+    const intPart = parts[0].replace(/\./g, "");
+    const decPart = parts.slice(1).join("").replace(/[.,]/g, "");
+    
+    const formattedInt = intPart ? parseInt(intPart, 10).toLocaleString("id-ID") : "0";
+    return `${formattedInt},${decPart.slice(0, 4)}`;
+  }
+  
+  if (clean.includes(".")) {
+    const lastDotIdx = clean.lastIndexOf(".");
+    const digitsAfterDot = clean.slice(lastDotIdx + 1);
+    const digitsBeforeDot = clean.slice(0, lastDotIdx);
+    const dotCount = clean.split(".").length - 1;
+    
+    const isDecimalDot = 
+      lastDotIdx === clean.length - 1 || 
+      (dotCount === 1 && (
+        digitsAfterDot.length === 1 || 
+        digitsAfterDot.length === 2 || 
+        digitsBeforeDot.length > 3
+      ));
+      
+    if (isDecimalDot) {
+      const intPart = digitsBeforeDot.replace(/\./g, "");
+      const decPart = digitsAfterDot.replace(/\./g, "");
+      const formattedInt = intPart ? parseInt(intPart, 10).toLocaleString("id-ID") : "0";
+      return `${formattedInt},${decPart.slice(0, 4)}`;
+    } else {
+      const intPart = clean.replace(/\./g, "");
+      return intPart ? parseInt(intPart, 10).toLocaleString("id-ID") : "";
+    }
+  }
+  
+  const intPart = clean;
+  return intPart ? parseInt(intPart, 10).toLocaleString("id-ID") : "";
+};
+
+export const parseDecimalInput = (formattedValue: string): number => {
+  if (!formattedValue) return 0;
+  const clean = formattedValue.replace(/\./g, "").replace(/,/g, ".");
+  return parseFloat(clean) || 0;
+};
+
+const generateTrxId = () => `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
 const generateUserId = () => "USR-" + Math.random().toString(36).substring(2, 11).toUpperCase();
 
 const INITIAL_FORM_STATE: FormState = {
@@ -53,6 +124,8 @@ const INITIAL_FORM_STATE: FormState = {
   sertakanTandaTangan: false,
   jumlah: "",
   kuantitas: "1",
+  diskon: "0",
+  items: [],
   namaPembeli: "",
   noTelepon: "",
   notes: "",
@@ -291,10 +364,13 @@ export function useUserDashboard({
   };
 
   const handleAmountChange = (value: string) => {
-    // Strip dots and any non-digit chars, then re-format with thousand separators
-    const numericValue = value.replace(/\./g, "").replace(/\D/g, "");
-    const formatted = numericValue ? parseInt(numericValue, 10).toLocaleString("id-ID") : "";
+    const formatted = formatDecimalInput(value);
     setForm(prev => ({ ...prev, jumlah: formatted }));
+  };
+
+  const handleDiscountChange = (value: string) => {
+    const formatted = formatDecimalInput(value);
+    setForm(prev => ({ ...prev, diskon: formatted }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -311,8 +387,10 @@ export function useUserDashboard({
       statusPembayaran: form.statusPembayaran,
       statusDokumen: form.statusDokumen,
       sertakanTandaTangan: form.sertakanTandaTangan,
-      jumlah: Number(form.jumlah.replace(/\./g, "")),
+      jumlah: parseDecimalInput(form.jumlah),
       kuantitas: Number(form.kuantitas),
+      diskon: parseDecimalInput(form.diskon) || 0,
+      items: form.items || [],
       namaPembeli: form.namaPembeli,
       noTelepon: form.noTelepon,
       notes: form.notes
@@ -393,6 +471,8 @@ export function useUserDashboard({
       sertakanTandaTangan: !!trx.sertakanTandaTangan,
       jumlah: trx.jumlah.toLocaleString("id-ID"),
       kuantitas: trx.kuantitas.toString(),
+      diskon: (trx.diskon || 0).toLocaleString("id-ID"),
+      items: trx.items || [],
       namaPembeli: trx.namaPembeli,
       noTelepon: trx.noTelepon,
       notes: trx.notes
@@ -414,8 +494,10 @@ export function useUserDashboard({
       statusPembayaran: form.statusPembayaran,
       statusDokumen: form.statusDokumen,
       sertakanTandaTangan: form.sertakanTandaTangan,
-      jumlah: Number(form.jumlah.replace(/\./g, "")),
+      jumlah: parseDecimalInput(form.jumlah),
       kuantitas: Number(form.kuantitas),
+      diskon: parseDecimalInput(form.diskon) || 0,
+      items: form.items || [],
       namaPembeli: form.namaPembeli,
       noTelepon: form.noTelepon,
       notes: form.notes
@@ -493,6 +575,11 @@ export function useUserDashboard({
     return new Date(year, month - 1, day);
   };
 
+  const getTrxTotal = (t: Transaction) => {
+    const base = t.items && t.items.length > 0 ? t.jumlah : t.jumlah * t.kuantitas;
+    return Math.max(0, base - (t.diskon || 0));
+  };
+
   // --- Statistics ---
   const [timeframe, setTimeframe] = useState<"Harian" | "Mingguan" | "Bulanan">("Mingguan");
 
@@ -507,10 +594,10 @@ export function useUserDashboard({
 
     const debit = transactions
       .filter(t => t.tanggal === dateStr && t.tipe === "Debit")
-      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+      .reduce((sum, t) => sum + getTrxTotal(t), 0);
     const kredit = transactions
       .filter(t => t.tanggal === dateStr && t.tipe === "Kredit")
-      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+      .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
     return {
       name,
@@ -536,10 +623,10 @@ export function useUserDashboard({
 
     const debit = inRangeTrx
       .filter(t => t.tipe === "Debit")
-      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+      .reduce((sum, t) => sum + getTrxTotal(t), 0);
     const kredit = inRangeTrx
       .filter(t => t.tipe === "Kredit")
-      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+      .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
     return {
       name: `W${i + 1}`,
@@ -563,10 +650,10 @@ export function useUserDashboard({
 
     const debit = inRangeTrx
       .filter(t => t.tipe === "Debit")
-      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+      .reduce((sum, t) => sum + getTrxTotal(t), 0);
     const kredit = inRangeTrx
       .filter(t => t.tipe === "Kredit")
-      .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+      .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
     return {
       name,
@@ -593,28 +680,28 @@ export function useUserDashboard({
       const tDate = parseLocalDate(t.tanggal);
       return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth && t.tipe === "Debit";
     })
-    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
   const debitPrevMonth = transactions
     .filter(t => {
       const tDate = parseLocalDate(t.tanggal);
       return tDate.getFullYear() === prevYear && tDate.getMonth() === prevMonth && t.tipe === "Debit";
     })
-    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
   const kreditCurrentMonth = transactions
     .filter(t => {
       const tDate = parseLocalDate(t.tanggal);
       return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth && t.tipe === "Kredit";
     })
-    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
   const kreditPrevMonth = transactions
     .filter(t => {
       const tDate = parseLocalDate(t.tanggal);
       return tDate.getFullYear() === prevYear && tDate.getMonth() === prevMonth && t.tipe === "Kredit";
     })
-    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
   const debitChangePct = debitPrevMonth === 0 
     ? (debitCurrentMonth > 0 ? 100 : 0) 
@@ -635,7 +722,7 @@ export function useUserDashboard({
   let lainLainAmount = 0;
 
   expensesList.forEach(t => {
-    const amt = t.jumlah * t.kuantitas;
+    const amt = getTrxTotal(t);
     totalKreditAmount += amt;
     const desc = (t.namaPembeli + " " + (t.notes || "")).toLowerCase();
     
@@ -712,7 +799,7 @@ export function useUserDashboard({
         desc.includes("database")
       );
     })
-    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
   const serverSpentThisMonth = transactions
     .filter(t => {
@@ -734,7 +821,7 @@ export function useUserDashboard({
         desc.includes("database")
       );
     })
-    .reduce((sum, t) => sum + t.jumlah * t.kuantitas, 0);
+    .reduce((sum, t) => sum + getTrxTotal(t), 0);
 
   const limitOperasional = 20000000;
   const limitServer = 10000000;
@@ -744,11 +831,11 @@ export function useUserDashboard({
 
   const totalIncome = transactions
     .filter(t => t.tipe === "Debit")
-    .reduce((acc, curr) => acc + curr.jumlah * curr.kuantitas, 0);
+    .reduce((acc, curr) => acc + getTrxTotal(curr), 0);
 
   const totalExpense = transactions
     .filter(t => t.tipe === "Kredit")
-    .reduce((acc, curr) => acc + curr.jumlah * curr.kuantitas, 0);
+    .reduce((acc, curr) => acc + getTrxTotal(curr), 0);
 
   const netBalance = totalIncome - totalExpense;
 
@@ -760,8 +847,8 @@ export function useUserDashboard({
         acc.set(date, { name: date, Debit: 0, Kredit: 0 });
       }
       const data = acc.get(date)!;
-      if (t.tipe === "Debit") data.Debit += t.jumlah * t.kuantitas;
-      else data.Kredit += t.jumlah * t.kuantitas;
+      if (t.tipe === "Debit") data.Debit += getTrxTotal(t);
+      else data.Kredit += getTrxTotal(t);
       return acc;
     }, new Map<string, { name: string; Debit: number; Kredit: number }>())
   ).map(([_, val]) => val).slice(-7);
@@ -799,17 +886,23 @@ export function useUserDashboard({
     let sumCredit = 0;
 
     const dataToExport = sortedTrx.map((t, index) => {
-      const debit = t.tipe === "Debit" ? t.jumlah * t.kuantitas : 0;
-      const credit = t.tipe === "Kredit" ? t.jumlah * t.kuantitas : 0;
+      const debit = t.tipe === "Debit" ? getTrxTotal(t) : 0;
+      const credit = t.tipe === "Kredit" ? getTrxTotal(t) : 0;
       sumDebit += debit;
       sumCredit += credit;
       runningBalance += (debit - credit);
+
+      let detailDesc = t.namaPembeli + (t.notes ? ` - ${t.notes}` : '');
+      if (t.items && t.items.length > 0) {
+        const itemNames = t.items.map(i => `${i.namaPembeli || i.deskripsi || t.namaPembeli} (Qty: ${i.kuantitas || 1})`).join(", ");
+        detailDesc += `\n[Rincian: ${itemNames}]`;
+      }
 
       return {
         'No': index + 1,
         'Tanggal': t.tanggal,
         'ID Transaksi': t.trxId,
-        'Keterangan / Deskripsi': t.namaPembeli + (t.notes ? ` - ${t.notes}` : ''),
+        'Keterangan / Deskripsi': detailDesc,
         'Kontak/WhatsApp': t.noTelepon || '-',
         'Debit (Masuk)': debit,
         'Kredit (Keluar)': credit,
@@ -894,6 +987,58 @@ export function useUserDashboard({
     t.userId.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownloadDocumentPdf = async (id: string, trxId: string, docType: "Invoice" | "Kwitansi") => {
+    if (isOffline || !id || String(id).includes("dummy") || String(id).length > 20) {
+      setNotification({
+        message: "Pengunduhan PDF tidak tersedia dalam Sesi Lokal / Offline.",
+        type: "error"
+      });
+      return;
+    }
+
+    setDownloadingId(id);
+    try {
+      const endpoint = docType === "Invoice"
+        ? `http://127.0.0.1:5000/api/invoices/transaction/${id}/pdf`
+        : `http://127.0.0.1:5000/api/receipts/transaction/${id}/pdf`;
+
+      const res = await fetch(endpoint, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setNotification({
+          message: errData.message || "Gagal mengunduh PDF.",
+          type: "error"
+        });
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${docType}-${trxId.replace(/\//g, "-")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setNotification({
+        message: `${docType} PDF berhasil diunduh!`,
+        type: "success"
+      });
+    } catch (err) {
+      console.error(err);
+      setNotification({
+        message: "Terjadi kesalahan saat mengunduh PDF.",
+        type: "error"
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return {
     isSidebarOpen,
     setIsSidebarOpen,
@@ -921,6 +1066,7 @@ export function useUserDashboard({
     handleFileUpload,
     terbilang,
     handleAmountChange,
+    handleDiscountChange,
     handleSave,
     handleDelete,
     deletingId,
@@ -954,7 +1100,9 @@ export function useUserDashboard({
     pctLayananHosting,
     pctLainLain,
     pctOperasionalBudget,
-    pctServerBudget
+    pctServerBudget,
+    downloadingId,
+    handleDownloadDocumentPdf
   };
 }
 export type { Transaction, FormState };
