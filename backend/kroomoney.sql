@@ -519,21 +519,3 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-06-19 14:36:11
-
-
--- Tabel untuk transaction_items
-CREATE TABLE IF NOT EXISTS transaction_items (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  transaction_id INT NOT NULL COMMENT 'Ref logis ke transactions.id',
-  tanggal DATE,
-  tipe VARCHAR(50),
-  status_pembayaran VARCHAR(50),
-  jumlah BIGINT DEFAULT 0,
-  kuantitas INT DEFAULT 1,
-  diskon BIGINT DEFAULT 0,
-  nama_pembeli VARCHAR(255),
-  no_telepon VARCHAR(50),
-  notes TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
-);

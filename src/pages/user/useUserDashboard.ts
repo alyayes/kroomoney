@@ -65,51 +65,25 @@ interface Profile {
 }
 
 export const formatDecimalInput = (value: string): string => {
-  let clean = value.replace(/[^0-9.,]/g, "");
-  
-  if (clean.includes(",")) {
-    const parts = clean.split(",");
-    const intPart = parts[0].replace(/\./g, "");
-    const decPart = parts.slice(1).join("").replace(/[.,]/g, "");
-    
-    const formattedInt = intPart ? parseInt(intPart, 10).toLocaleString("id-ID") : "0";
-    return `${formattedInt},${decPart.slice(0, 4)}`;
-  }
-  
-  if (clean.includes(".")) {
-    const lastDotIdx = clean.lastIndexOf(".");
-    const digitsAfterDot = clean.slice(lastDotIdx + 1);
-    const digitsBeforeDot = clean.slice(0, lastDotIdx);
-    const dotCount = clean.split(".").length - 1;
-    
-    const isDecimalDot = 
-      lastDotIdx === clean.length - 1 || 
-      (dotCount === 1 && (
-        digitsAfterDot.length === 1 || 
-        digitsAfterDot.length === 2 || 
-        digitsBeforeDot.length > 3
-      ));
-      
-    if (isDecimalDot) {
-      const intPart = digitsBeforeDot.replace(/\./g, "");
-      const decPart = digitsAfterDot.replace(/\./g, "");
-      const formattedInt = intPart ? parseInt(intPart, 10).toLocaleString("id-ID") : "0";
-      return `${formattedInt},${decPart.slice(0, 4)}`;
-    } else {
-      const intPart = clean.replace(/\./g, "");
-      return intPart ? parseInt(intPart, 10).toLocaleString("id-ID") : "";
-    }
-  }
-  
-  const intPart = clean;
-  return intPart ? parseInt(intPart, 10).toLocaleString("id-ID") : "";
+  // For Indonesian Rupiah: only integers, period or comma as thousands separator
+  // Remove all non-digit characters first
+  const digits = value.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  const num = parseInt(digits, 10);
+  if (isNaN(num)) return "";
+  // Format with Indonesian locale (period as thousands separator)
+  return num.toLocaleString("id-ID");
 };
 
 export const parseDecimalInput = (formattedValue: string): number => {
   if (!formattedValue) return 0;
-  const clean = formattedValue.replace(/\./g, "").replace(/,/g, ".");
-  return parseFloat(clean) || 0;
+  // Strip ALL non-digit characters (handles both . and , separators)
+  const digits = formattedValue.replace(/[^0-9]/g, "");
+  if (!digits) return 0;
+  return parseInt(digits, 10) || 0;
 };
+
+const formatDatePart = (dateStr: string): string => dateStr ? dateStr.split("T")[0] : "";
 
 const generateTrxId = () => `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
 const generateUserId = () => "USR-" + Math.random().toString(36).substring(2, 11).toUpperCase();
@@ -251,6 +225,37 @@ export function useUserDashboard({
     }
   };
 
+  const generateLocalAiInsight = (txs: Transaction[]) => {
+    if (txs.length === 0) {
+      return "Belum ada transaksi tercatat untuk dianalisis oleh AI KroomBox.";
+    }
+
+    let totalDebit = 0;
+    let totalKredit = 0;
+
+    txs.forEach(t => {
+      const base = t.items && t.items.length > 0 ? t.jumlah : t.jumlah * t.kuantitas;
+      const total = Math.max(0, base - (t.diskon || 0));
+      if (t.tipe === "Kredit") {
+        totalKredit += total;
+      } else {
+        totalDebit += total;
+      }
+    });
+
+    const formatRupiah = (num: number) => {
+      return "Rp " + num.toLocaleString("id-ID");
+    };
+
+    const diff = totalDebit - totalKredit;
+    
+    if (totalKredit > totalDebit) {
+      return `Kerugian Terdeteksi! Total pengeluaran (${formatRupiah(totalKredit)}) melebihi pemasukan (${formatRupiah(totalDebit)}) dengan defisit sebesar ${formatRupiah(Math.abs(diff))}. Langkah selanjutnya: segera tunda pengeluaran non-esensial, lakukan audit biaya operasional server/hosting, serta tindak lanjuti tagihan pelanggan yang statusnya masih pending.`;
+    } else {
+      return `Arus kas terpantau sehat! Total pemasukan (${formatRupiah(totalDebit)}) melebihi pengeluaran (${formatRupiah(totalKredit)}) dengan surplus sebesar ${formatRupiah(diff)}. Langkah selanjutnya: pertahankan efisiensi biaya saat ini, alokasikan surplus dana ke kas cadangan (dana darurat), dan investasikan untuk peningkatan kualitas layanan hosting.`;
+    }
+  };
+
   const syncWithBackend = async () => {
     if (!token || token === "offline-token-session") return;
     try {
@@ -279,11 +284,17 @@ export function useUserDashboard({
       }
       const aiRes = await apiRequest("/settings/ai-insights");
       if (aiRes && aiRes.data) {
-        setAiInsight(aiRes.data);
+        if (aiRes.data.includes("Silakan atur Google Gemini API Key") || aiRes.data.includes("Silakan atur Google Gemini API Key Anda")) {
+          const localAnalysis = generateLocalAiInsight(transRes?.data || transactions);
+          setAiInsight(`[Kunci API Belum Diset] ${localAnalysis}`);
+        } else {
+          setAiInsight(aiRes.data);
+        }
       }
       setIsOffline(false);
     } catch (err: any) {
-      setAiInsight("Sesi offline. Silakan hubungkan server backend untuk mengaktifkan AI Asisten.");
+      const localAnalysis = generateLocalAiInsight(transactions);
+      setAiInsight(`[Sesi Offline - Analisis Lokal] ${localAnalysis}`);
       if (err.message === "offline") {
         setIsOffline(true);
         setNotification({
@@ -299,8 +310,19 @@ export function useUserDashboard({
   useEffect(() => {
     if (token && token !== "offline-token-session") {
       syncWithBackend();
+    } else {
+      const localAnalysis = generateLocalAiInsight(transactions);
+      setAiInsight(`[Sesi Offline - Analisis Lokal] ${localAnalysis}`);
     }
   }, [token]);
+
+  // Update local AI Insight when transactions or offline state changes
+  useEffect(() => {
+    if (isOffline || !token || token === "offline-token-session") {
+      const localAnalysis = generateLocalAiInsight(transactions);
+      setAiInsight(`[Sesi Offline - Analisis Lokal] ${localAnalysis}`);
+    }
+  }, [transactions, isOffline, token]);
 
   useEffect(() => {
     localStorage.setItem("kroombox_data", JSON.stringify(transactions));
@@ -346,7 +368,8 @@ export function useUserDashboard({
     const newErrors: Partial<Record<keyof FormState, string>> = {};
     if (!form.tanggal) newErrors.tanggal = "Tanggal wajib diisi";
     // User ID is optional for manual entry (e.g. general expense/cash receipts)
-    if (!form.jumlah || isNaN(Number(form.jumlah.replace(/\D/g, "")))) newErrors.jumlah = "Jumlah tidak valid";
+    const parsedJumlah = parseDecimalInput(form.jumlah);
+    if (!form.jumlah || parsedJumlah <= 0) newErrors.jumlah = "Jumlah tidak valid";
     if (!form.namaPembeli) newErrors.namaPembeli = "Keterangan / Nama pembeli wajib diisi";
     if (!form.kuantitas || Number(form.kuantitas) <= 0) newErrors.kuantitas = "Kuantitas minimal 1";
 
@@ -378,19 +401,43 @@ export function useUserDashboard({
     if (!validateForm()) return;
 
     setIsSubmitting(true);
+    const filteredItems = (form.items || []).filter(item => {
+      const amt = parseDecimalInput(item.jumlah);
+      if (amt === 0) {
+        const isNameEmptyOrDuplicate = !item.namaPembeli || item.namaPembeli.trim() === "" || item.namaPembeli === form.namaPembeli;
+        return !isNameEmptyOrDuplicate;
+      }
+      return true;
+    });
+
+    const finalJumlah = filteredItems.length > 0
+      ? filteredItems.reduce((acc, curr) => acc + (parseDecimalInput(curr.jumlah) * Number(curr.kuantitas)), 0)
+      : parseDecimalInput(form.jumlah);
+
+    const finalKuantitas = filteredItems.length > 0
+      ? filteredItems.reduce((acc, curr) => acc + Number(curr.kuantitas), 0)
+      : Number(form.kuantitas);
+
+    const finalDiskon = filteredItems.length > 0
+      ? filteredItems.reduce((acc, curr) => acc + parseDecimalInput(curr.diskon), 0)
+      : (parseDecimalInput(form.diskon) || 0);
+
     const newTrx: Transaction = {
       id: crypto.randomUUID(),
       trxId: form.trxId,
-      tanggal: form.tanggal,
+      tanggal: formatDatePart(form.tanggal),
       userId: form.userId,
       tipe: form.tipe,
       statusPembayaran: form.statusPembayaran,
       statusDokumen: form.statusDokumen,
       sertakanTandaTangan: form.sertakanTandaTangan,
-      jumlah: parseDecimalInput(form.jumlah),
-      kuantitas: Number(form.kuantitas),
-      diskon: parseDecimalInput(form.diskon) || 0,
-      items: form.items || [],
+      jumlah: finalJumlah,
+      kuantitas: finalKuantitas,
+      diskon: finalDiskon,
+      items: filteredItems.map(item => ({
+        ...item,
+        tanggal: formatDatePart(item.tanggal || form.tanggal)
+      })),
       namaPembeli: form.namaPembeli,
       noTelepon: form.noTelepon,
       notes: form.notes
@@ -463,7 +510,7 @@ export function useUserDashboard({
     setEditingTrxId(trx.id);
     setForm({
       trxId: trx.trxId,
-      tanggal: trx.tanggal,
+      tanggal: formatDatePart(trx.tanggal),
       userId: trx.userId,
       tipe: trx.tipe,
       statusPembayaran: trx.statusPembayaran,
@@ -472,7 +519,12 @@ export function useUserDashboard({
       jumlah: trx.jumlah.toLocaleString("id-ID"),
       kuantitas: trx.kuantitas.toString(),
       diskon: (trx.diskon || 0).toLocaleString("id-ID"),
-      items: trx.items || [],
+      items: (trx.items || []).map(item => ({
+        ...item,
+        tanggal: formatDatePart(item.tanggal || trx.tanggal),
+        jumlah: typeof (item.jumlah as any) === 'number' ? (item.jumlah as any).toLocaleString("id-ID") : String(item.jumlah || "0"),
+        diskon: typeof (item.diskon as any) === 'number' ? (item.diskon as any).toLocaleString("id-ID") : String(item.diskon || "0")
+      })),
       namaPembeli: trx.namaPembeli,
       noTelepon: trx.noTelepon,
       notes: trx.notes
@@ -483,21 +535,53 @@ export function useUserDashboard({
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm() || !editingTrxId) return;
+
+    // Capture current editingTrxId to avoid stale closure
+    const currentEditingId = editingTrxId;
+    if (!currentEditingId) {
+      setNotification({ message: "Tidak ada transaksi yang dipilih untuk diedit.", type: "error" });
+      return;
+    }
+
+    if (!validateForm()) return;
+
+    const filteredItems = (form.items || []).filter(item => {
+      const amt = parseDecimalInput(item.jumlah);
+      if (amt === 0) {
+        const isNameEmptyOrDuplicate = !item.namaPembeli || item.namaPembeli.trim() === "" || item.namaPembeli === form.namaPembeli;
+        return !isNameEmptyOrDuplicate;
+      }
+      return true;
+    });
+
+    const finalJumlah = filteredItems.length > 0
+      ? filteredItems.reduce((acc, curr) => acc + (parseDecimalInput(curr.jumlah) * Number(curr.kuantitas)), 0)
+      : parseDecimalInput(form.jumlah);
+
+    const finalKuantitas = filteredItems.length > 0
+      ? filteredItems.reduce((acc, curr) => acc + Number(curr.kuantitas), 0)
+      : Number(form.kuantitas);
+
+    const finalDiskon = filteredItems.length > 0
+      ? filteredItems.reduce((acc, curr) => acc + parseDecimalInput(curr.diskon), 0)
+      : (parseDecimalInput(form.diskon) || 0);
 
     const updatedTrx: Transaction = {
-      id: editingTrxId,
+      id: currentEditingId,
       trxId: form.trxId,
-      tanggal: form.tanggal,
+      tanggal: formatDatePart(form.tanggal),
       userId: form.userId,
       tipe: form.tipe,
       statusPembayaran: form.statusPembayaran,
       statusDokumen: form.statusDokumen,
       sertakanTandaTangan: form.sertakanTandaTangan,
-      jumlah: parseDecimalInput(form.jumlah),
-      kuantitas: Number(form.kuantitas),
-      diskon: parseDecimalInput(form.diskon) || 0,
-      items: form.items || [],
+      jumlah: finalJumlah,
+      kuantitas: finalKuantitas,
+      diskon: finalDiskon,
+      items: filteredItems.map(item => ({
+        ...item,
+        tanggal: formatDatePart(item.tanggal || form.tanggal)
+      })),
       namaPembeli: form.namaPembeli,
       noTelepon: form.noTelepon,
       notes: form.notes
@@ -506,15 +590,20 @@ export function useUserDashboard({
     try {
       let finalTrx = updatedTrx;
       if (token && token !== "offline-token-session") {
-        const res = await apiRequest(`/transactions/${editingTrxId}`, {
-          method: "PUT",
-          body: JSON.stringify(updatedTrx)
-        });
-        if (res && res.data) {
-          finalTrx = res.data;
+        try {
+          const res = await apiRequest(`/transactions/${currentEditingId}`, {
+            method: "PUT",
+            body: JSON.stringify(updatedTrx)
+          });
+          if (res && res.data) {
+            finalTrx = res.data;
+          }
+        } catch (apiErr: any) {
+          // Backend failed, but still save locally
+          console.warn("Backend update failed, saving locally:", apiErr.message);
         }
       }
-      setTransactions(prev => prev.map(t => t.id === editingTrxId ? finalTrx : t));
+      setTransactions(prev => prev.map(t => String(t.id) === String(currentEditingId) ? finalTrx : t));
       setNotification({ message: "Transaksi berhasil diperbarui!", type: "success" });
       setIsEditModalOpen(false);
       setEditingTrxId(null);
@@ -525,20 +614,7 @@ export function useUserDashboard({
         tanggal: new Date().toISOString().split("T")[0]
       });
     } catch (err: any) {
-      if (err.message === "offline") {
-        setTransactions(prev => prev.map(t => t.id === editingTrxId ? updatedTrx : t));
-        setNotification({ message: "Transaksi diperbarui di sesi lokal (Offline).", type: "success" });
-        setIsEditModalOpen(false);
-        setEditingTrxId(null);
-        setForm({
-          ...INITIAL_FORM_STATE,
-          trxId: generateTrxId(),
-          userId: "",
-          tanggal: new Date().toISOString().split("T")[0]
-        });
-      } else {
-        setNotification({ message: err.message || "Gagal memperbarui transaksi.", type: "error" });
-      }
+      setNotification({ message: err.message || "Gagal memperbarui transaksi.", type: "error" });
     }
   };
 
@@ -988,11 +1064,76 @@ export function useUserDashboard({
   );
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+
+  const handleDownloadReportPdf = async () => {
+    setIsDownloadingReport(true);
+    try {
+      const endpoint = `http://127.0.0.1:5000/api/invoices/generate-report-pdf`;
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          transactions: filteredTransactions,
+          allTransactions: transactions,
+          aiInsight,
+          profile
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setNotification({
+          message: errData.message || "Gagal mengunduh PDF Laporan.",
+          type: "error"
+        });
+        return;
+      }
+      
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      a.download = `Laporan_Keuangan_KroomBox_${todayStr}.pdf`;
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setNotification({
+        message: "PDF Laporan Keuangan berhasil diunduh!",
+        type: "success"
+      });
+    } catch (err) {
+      console.error(err);
+      setNotification({
+        message: "Koneksi ke server gagal. Pastikan server backend aktif.",
+        type: "error"
+      });
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  };
 
   const handleDownloadDocumentPdf = async (id: string, trxId: string, docType: "Invoice" | "Kwitansi") => {
-    if (isOffline || !id || String(id).includes("dummy") || String(id).length > 20) {
+    if (!id) {
       setNotification({
-        message: "Pengunduhan PDF tidak tersedia dalam Sesi Lokal / Offline.",
+        message: "ID Transaksi tidak valid.",
+        type: "error"
+      });
+      return;
+    }
+
+    const trx = transactions.find(t => t.id === id);
+    if (!trx) {
+      setNotification({
+        message: "Transaksi tidak ditemukan.",
         type: "error"
       });
       return;
@@ -1000,13 +1141,17 @@ export function useUserDashboard({
 
     setDownloadingId(id);
     try {
-      const endpoint = docType === "Invoice"
-        ? `http://127.0.0.1:5000/api/invoices/transaction/${id}/pdf`
-        : `http://127.0.0.1:5000/api/receipts/transaction/${id}/pdf`;
+      const endpoint = `http://127.0.0.1:5000/api/invoices/generate-pdf-from-data`;
 
       const res = await fetch(endpoint, {
-        headers: { "Authorization": `Bearer ${token}` }
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ trx, docType, profile })
       });
+
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         setNotification({
@@ -1015,11 +1160,39 @@ export function useUserDashboard({
         });
         return;
       }
+      
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${docType}-${trxId.replace(/\//g, "-")}.pdf`;
+      
+      let finalFileName = `${docType}-${trxId.replace(/\//g, "-")}.pdf`;
+      if (docType === "Invoice") {
+        try {
+          const yyyymmdd = trx.tanggal ? trx.tanggal.substring(0, 10).replace(/-/g, '') : '';
+          const rawCode = trx.trxId.split('-')[1] || trx.id;
+          const code = String(rawCode).replace(/\D/g, "") || "1001";
+          finalFileName = yyyymmdd ? `INV-${yyyymmdd}-MPL-${code}.pdf` : `INV-MPL-${code}.pdf`;
+        } catch {
+          const rawCode = trx.trxId?.split('-')[1] || trx.id || "1001";
+          const code = String(rawCode).replace(/\D/g, "") || "1001";
+          finalFileName = `INV-MPL-${code}.pdf`;
+        }
+      } else if (docType === "Kwitansi") {
+        try {
+          const yyyymmdd = trx.tanggal ? trx.tanggal.substring(0, 10).replace(/-/g, '') : '';
+          const rawCode = trx.trxId?.split('-')[1] || trx.id;
+          const code = String(rawCode).replace(/\D/g, "").padStart(4, '0') || "0001";
+          finalFileName = yyyymmdd ? `KWT-${yyyymmdd}-${code}.pdf` : `KWT-${code}.pdf`;
+        } catch {
+          const rawCode = trx.trxId?.split('-')[1] || trx.id || "0001";
+          const code = String(rawCode).replace(/\D/g, "").padStart(4, '0') || "0001";
+          finalFileName = `KWT-${code}.pdf`;
+        }
+      }
+
+      a.download = finalFileName;
+      
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1031,7 +1204,7 @@ export function useUserDashboard({
     } catch (err) {
       console.error(err);
       setNotification({
-        message: "Terjadi kesalahan saat mengunduh PDF.",
+        message: "Koneksi ke server gagal. Pastikan server backend aktif.",
         type: "error"
       });
     } finally {
@@ -1102,7 +1275,9 @@ export function useUserDashboard({
     pctOperasionalBudget,
     pctServerBudget,
     downloadingId,
-    handleDownloadDocumentPdf
+    handleDownloadDocumentPdf,
+    isDownloadingReport,
+    handleDownloadReportPdf
   };
 }
 export type { Transaction, FormState };

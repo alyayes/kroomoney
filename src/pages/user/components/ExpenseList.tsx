@@ -71,8 +71,8 @@ export default function ExpenseList({
                 <th className="py-5 px-6">User ID</th>
                 <th className="py-5 px-6">Keterangan</th>
                 <th className="py-5 px-6 text-center">Qty</th>
-                <th className="py-5 px-6">Jumlah Satuan</th>
-                <th className="py-5 px-6">Total</th>
+                <th className="py-5 px-6">Harga Satuan</th>
+                <th className="py-5 px-6">Total Harga</th>
                 <th className="py-5 px-6">Status</th>
                 <th className="py-5 px-6 text-right">Aksi</th>
               </tr>
@@ -86,8 +86,8 @@ export default function ExpenseList({
                     <td className="py-5 px-6 font-mono text-slate-400">{t.userId}</td>
                     <td className="py-5 px-6 text-slate-900">{t.namaPembeli}</td>
                     <td className="py-5 px-6 text-center">{t.kuantitas}</td>
-                    <td className="py-5 px-6">{formatRupiah(t.jumlah)}</td>
-                    <td className="py-5 px-6 text-red-500">{formatRupiah(t.jumlah * t.kuantitas)}</td>
+                    <td className="py-5 px-6">{t.items && t.items.length > 0 ? <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded-md font-black uppercase tracking-widest">Multi-Item</span> : formatRupiah(t.jumlah)}</td>
+                    <td className="py-5 px-6 text-red-500">{formatRupiah(t.items && t.items.length > 0 ? t.jumlah : t.jumlah * t.kuantitas)}</td>
                     <td className="py-5 px-6">
                       <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${t.statusPembayaran === 'Lunas' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
                         {t.statusPembayaran}

@@ -2,9 +2,14 @@ import { pool } from '../config/db.js';
 
 class InvoiceModel {
   // Generate nomor invoice otomatis: INV-YYYYMM-XXXX
-  static async generateNomor() {
-    const now = new Date();
-    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  static async generateNomor(customDate) {
+    let yyyymm;
+    if (customDate && typeof customDate === 'string') {
+      yyyymm = customDate.substring(0, 7).replace(/-/g, '');
+    } else {
+      const d = customDate instanceof Date ? customDate : new Date();
+      yyyymm = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
     const prefix = `INV-${yyyymm}-`;
     const [rows] = await pool.query(
       `SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY id DESC LIMIT 1`,
@@ -112,7 +117,7 @@ class InvoiceModel {
     tanggal_terbit, tanggal_jatuh_tempo,
     catatan, catatan_internal, created_by
   }) {
-    const invoice_number = await InvoiceModel.generateNomor();
+    const invoice_number = await InvoiceModel.generateNomor(tanggal_terbit);
     
     // Resolve customer_id
     let customerId = null;

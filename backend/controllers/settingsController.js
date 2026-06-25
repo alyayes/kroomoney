@@ -75,17 +75,10 @@ export const getAiInsights = async (req, res) => {
   try {
     // 1. Fetch Gemini settings from database
     const geminiSetting = await SettingModel.findByKey('gemini_api_key');
-    
-    if (!geminiSetting || !geminiSetting.setting_value) {
-      return res.status(200).json({
-        status: 'success',
-        data: 'Silakan atur Google Gemini API Key Anda di panel Admin untuk mengaktifkan asisten AI KroomBox secara dinamis.'
-      });
-    }
+    let apiKey = geminiSetting?.setting_value || process.env.GEMINI_API_KEY;
 
-    const apiKey = geminiSetting.setting_value;
-    const model = geminiSetting.gemini_model_version || 'gemini-1.5-flash';
-    const temp = geminiSetting.gemini_temperature !== undefined ? geminiSetting.gemini_temperature : 0.2;
+    const model = geminiSetting?.gemini_model_version || 'gemini-1.5-flash';
+    const temp = geminiSetting?.gemini_temperature !== undefined ? geminiSetting.gemini_temperature : 0.2;
 
     // 2. Fetch all transactions (transaksi) joined with customer names
     const transactions = await TransactionModel.findAll();
@@ -93,17 +86,75 @@ export const getAiInsights = async (req, res) => {
     if (transactions.length === 0) {
       return res.status(200).json({
         status: 'success',
-        data: 'Halo! Belum ada transaksi pembayaran masuk tercatat untuk dianalisis oleh AI KroomBox.'
+        data: 'Halo! Belum ada transaksi tercatat untuk dianalisis oleh AI KroomBox.'
+      });
+    }
+
+    // Calculate dynamic totals
+    let totalDebit = 0;
+    let totalKredit = 0;
+
+    const formattedTransactions = transactions.map(t => {
+      const isExpense = t.tipe_transaksi === 'Pengeluaran' || t.tipe_transaksi === 'pengeluaran';
+      let parsedItems = t.items;
+      if (typeof parsedItems === 'string') {
+        try { parsedItems = JSON.parse(parsedItems); } catch (e) { parsedItems = null; }
+      }
+      
+      const base = parsedItems && parsedItems.length > 0 ? t.nominal_transfer : t.nominal_transfer * (t.kuantitas || 1);
+      const total = Math.max(0, base - (t.diskon || 0));
+
+      if (isExpense) {
+        totalKredit += total;
+      } else {
+        totalDebit += total;
+      }
+
+      // Safely parse date
+      const d = new Date(t.tanggal_bayar);
+      const dateString = isNaN(d.getTime()) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0];
+
+      return {
+        tanggal: dateString,
+        keterangan: t.nama_pelanggan || t.nama_manual || 'Input Manual',
+        tipe: isExpense ? 'Pengeluaran (Kredit)' : 'Pemasukan (Debit)',
+        total: total,
+        notes: t.notes || ''
+      };
+    });
+
+    const balance = totalDebit - totalKredit;
+    const financialStatus = balance >= 0 ? 'Surplus (Untung)' : 'Defisit (Rugi / Tidak Sehat)';
+
+    // If API key is not set, return a realistic simulated analysis
+    if (!apiKey || apiKey.trim() === '') {
+      const formatRupiah = (num) => "Rp " + num.toLocaleString("id-ID");
+      const diff = totalDebit - totalKredit;
+      let mockAnalysis = "";
+      if (totalKredit > totalDebit) {
+        mockAnalysis = `Analisis Keuangan KroomBox mendeteksi terjadinya kerugian! Total pengeluaran (${formatRupiah(totalKredit)}) melebihi total pemasukan (${formatRupiah(totalDebit)}) dengan defisit sebesar ${formatRupiah(Math.abs(diff))}. Langkah rekomendasi bendahara: segera tunda pengeluaran non-esensial, lakukan audit biaya operasional server/hosting, serta tindak lanjuti tagihan pelanggan yang statusnya masih pending.`;
+      } else {
+        mockAnalysis = `Analisis Keuangan KroomBox mendeteksi arus kas terpantau sehat! Total pemasukan (${formatRupiah(totalDebit)}) melebihi pengeluaran (${formatRupiah(totalKredit)}) dengan surplus sebesar ${formatRupiah(diff)}. Langkah rekomendasi bendahara: pertahankan efisiensi biaya saat ini, alokasikan surplus dana ke kas cadangan (dana darurat), dan investasikan untuk peningkatan kualitas layanan hosting.`;
+      }
+      return res.status(200).json({
+        status: 'success',
+        data: mockAnalysis
       });
     }
 
     // 3. Compile prompt
-    const prompt = `Anda adalah asisten keuangan AI untuk KroomBox. 
-Berikut adalah rangkuman data pembayaran masuk dari pelanggan hosting:
-${JSON.stringify(transactions.slice(0, 10), null, 2)}
+    const prompt = `Anda adalah asisten keuangan AI untuk KroomBox (aplikasi manajemen keuangan bendahara startup hosting).
+Berikut adalah rangkuman data keuangan startup saat ini:
+- Total Pemasukan (Debit): Rp ${totalDebit.toLocaleString('id-ID')}
+- Total Pengeluaran (Kredit): Rp ${totalKredit.toLocaleString('id-ID')}
+- Saldo Bersih: Rp ${balance.toLocaleString('id-ID')} (${financialStatus})
 
-Berdasarkan data di atas, berikan 1 paragraf analisis keuangan yang singkat, padat, dan memotivasi untuk bendahara. 
-Gunakan bahasa Indonesia yang kasual tapi profesional. Jangan gunakan markdown formatting (seperti bintang tebal atau bullet points), hanya teks kutipan dalam 1 paragraf pendek saja (maksimal 3 kalimat).`;
+Rincian Transaksi Terbaru (Maksimal 10):
+${JSON.stringify(formattedTransactions.slice(0, 10), null, 2)}
+
+Berdasarkan data keuangan di atas, tolong berikan analisis singkat (maksimal 3 kalimat) dalam 1 paragraf tanpa markdown formatting (jangan gunakan asterisk, bullet points, atau cetak tebal).
+PENTING: Jika pengeluaran (Kredit) lebih besar daripada pemasukan (Debit), jelaskan bahwa ini adalah kondisi defisit/kerugian yang kurang baik, dan berikan langkah konkret segera yang harus dilakukan bendahara (seperti menekan biaya operasional server/hosting, menagih tagihan/piutang yang tertunda dari pelanggan, atau membatasi pengeluaran non-esensial).
+Gunakan bahasa Indonesia yang kasual, santun, tapi tetap profesional dan memotivasi untuk bendahara.`;
 
     // 4. Hit Gemini developer API via native fetch
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {

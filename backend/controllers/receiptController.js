@@ -11,6 +11,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function formatItemList(items) {
+  if (!items || items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} dan ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, dan ${items[items.length - 1]}`;
+}
+
 function mapReceipt(r) {
   return {
     id: r.id,
@@ -89,7 +96,8 @@ export const generateReceipt = async (req, res) => {
     try {
       const receipt = await ReceiptModel.findById(insertId);
       const ttd = userRow[0]?.tanda_tangan || null;
-      const pdfPath = await generateReceiptPdf(receipt, inv, ttd);
+      const signerName = userRow[0]?.nama_lengkap || null;
+      const pdfPath = await generateReceiptPdf(receipt, inv, ttd, signerName);
       await ReceiptModel.updatePdfPath(insertId, pdfPath);
     } catch (pdfErr) {
       console.error('Kwitansi PDF warning:', pdfErr.message);
@@ -125,18 +133,22 @@ export const downloadReceiptPdf = async (req, res) => {
     const r = await ReceiptModel.findById(req.params.id);
     if (!r) return res.status(404).json({ status: 'error', message: 'Kwitansi tidak ditemukan.' });
 
-    let pdfRelPath = r.pdf_path;
-    if (!pdfRelPath || !existsSync(join(join(__dirname, '..'), pdfRelPath))) {
-      const inv = r.invoice_id ? await InvoiceModel.findById(r.invoice_id) : null;
-      const [userRow] = await pool.query('SELECT tanda_tangan FROM users WHERE id = ?', [r.created_by || req.user.id]);
-      const ttd = userRow[0]?.tanda_tangan || null;
-      pdfRelPath = await generateReceiptPdf(r, inv, ttd);
-      await ReceiptModel.updatePdfPath(r.id, pdfRelPath);
-    }
+    // Always regenerate to ensure the correct signer and template are used
+    const inv = r.invoice_id ? await InvoiceModel.findById(r.invoice_id) : null;
+    const [userRow] = await pool.query('SELECT nama_lengkap, tanda_tangan FROM users WHERE id = ?', [req.user.id]);
+    const ttd = userRow[0]?.tanda_tangan || null;
+    const signerName = userRow[0]?.nama_lengkap || null;
+    
+    const pdfRelPath = await generateReceiptPdf(r, inv, ttd, signerName);
+    await ReceiptModel.updatePdfPath(r.id, pdfRelPath);
 
     const absPath = join(join(__dirname, '..'), pdfRelPath);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${r.nomor_kwitansi}.pdf"`);
+    
+    const customerName = (r.nama_pelanggan || r.nama_manual || 'Pelanggan').replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_');
+    const filename = `Kwitansi_${customerName}.pdf`;
+    
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return res.sendFile(absPath);
   } catch (err) {
     console.error('downloadReceiptPdf error:', err);
@@ -153,14 +165,13 @@ export const sendReceiptEmail = async (req, res) => {
     const to = req.body.emailTujuan || req.body.email;
     if (!to) return res.status(400).json({ status: 'error', message: 'Email tujuan wajib diisi.' });
 
-    let pdfRelPath = r.pdf_path;
-    if (!pdfRelPath || !existsSync(join(join(__dirname, '..'), pdfRelPath))) {
-      const inv = r.invoice_id ? await InvoiceModel.findById(r.invoice_id) : null;
-      const [userRow] = await pool.query('SELECT tanda_tangan FROM users WHERE id = ?', [r.created_by || req.user.id]);
-      const ttd = userRow[0]?.tanda_tangan || null;
-      pdfRelPath = await generateReceiptPdf(r, inv, ttd);
-      await ReceiptModel.updatePdfPath(r.id, pdfRelPath);
-    }
+    const inv = r.invoice_id ? await InvoiceModel.findById(r.invoice_id) : null;
+    const [userRow] = await pool.query('SELECT nama_lengkap, tanda_tangan FROM users WHERE id = ?', [r.created_by || req.user.id]);
+    const ttd = userRow[0]?.tanda_tangan || null;
+    const signerName = userRow[0]?.nama_lengkap || null;
+    
+    const pdfRelPath = await generateReceiptPdf(r, inv, ttd, signerName);
+    await ReceiptModel.updatePdfPath(r.id, pdfRelPath);
 
     const nominal = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(r.nominal_diterima);
     const customerName = r.nama_pelanggan || r.nama_manual || 'Pelanggan';
@@ -341,6 +352,11 @@ export const downloadReceiptPdfByTransactionId = async (req, res) => {
     if (!r) {
       // Auto-generate receipt
       const [userRow] = await pool.query('SELECT nama_lengkap, tanda_tangan FROM users WHERE id = ?', [req.user.id]);
+      
+      const autoKeterangan = invoiceItems && invoiceItems.length > 0
+        ? formatItemList(invoiceItems.map(i => i.deskripsi).filter(Boolean))
+        : null;
+
       const { insertId } = await ReceiptModel.create({
         invoice_id: parseInt(inv.id),
         pelanggan_id: inv.pelanggan_id || null,
@@ -349,6 +365,7 @@ export const downloadReceiptPdfByTransactionId = async (req, res) => {
         nominal_diterima: inv.total,
         metode_pembayaran: 'Transfer Bank',
         diterima_oleh: userRow[0]?.nama_lengkap || 'Bendahara',
+        keterangan: autoKeterangan || null,
         created_by: req.user.id,
       });
 
@@ -360,14 +377,19 @@ export const downloadReceiptPdfByTransactionId = async (req, res) => {
     }
 
     // Generate fresh receipt PDF
-    const [userRow] = await pool.query('SELECT tanda_tangan FROM users WHERE id = ?', [r.created_by || req.user.id]);
+    const [userRow] = await pool.query('SELECT nama_lengkap, tanda_tangan FROM users WHERE id = ?', [req.user.id]);
     const ttd = userRow[0]?.tanda_tangan || null;
-    const pdfRelPath = await generateReceiptPdf(r, inv, ttd);
+    const signerName = userRow[0]?.nama_lengkap || null;
+    const pdfRelPath = await generateReceiptPdf(r, inv, ttd, signerName);
     await ReceiptModel.updatePdfPath(r.id, pdfRelPath);
 
     const absPath = join(join(__dirname, '..'), pdfRelPath);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${r.nomor_kwitansi}.pdf"`);
+    
+    const customerName = (r.nama_pelanggan || r.nama_manual || 'Pelanggan').replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_');
+    const filename = `Kwitansi_${customerName}.pdf`;
+    
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return res.sendFile(absPath);
   } catch (err) {
     console.error('downloadReceiptPdfByTransactionId error:', err);

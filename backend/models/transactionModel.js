@@ -44,38 +44,14 @@ class TransactionModel {
        WHERE t.deleted_at IS NULL
        ORDER BY t.created_at DESC`
     );
-    const transactionIds = rows.map(r => r.id);
-    let allItems = [];
-    if (transactionIds.length > 0) {
-      const [itemsRows] = await pool.query(
-        `SELECT * FROM transaction_items WHERE transaction_id IN (?)`,
-        [transactionIds]
-      );
-      allItems = itemsRows;
-    }
 
-    // Post-process rows if necessary to map enum values
     return rows.map(r => {
       if (r.status_konfirmasi === 'pending') r.status_konfirmasi = 'pending';
       else if (r.status_konfirmasi === 'lunas') r.status_konfirmasi = 'lunas';
       // Adjust boolean back to numeric if required by controllers
       r.sertakan_tanda_tangan = r.sertakan_tanda_tangan ? 1 : 0;
       
-      const items = allItems.filter(item => item.transaction_id === r.id);
-      if (items.length > 0) {
-        // Map database columns to frontend expected fields
-        r.items = items.map(item => ({
-          tanggal: item.tanggal,
-          tipe: item.tipe,
-          statusPembayaran: item.status_pembayaran,
-          jumlah: item.jumlah,
-          kuantitas: item.kuantitas,
-          diskon: item.diskon,
-          namaPembeli: item.nama_pembeli,
-          noTelepon: item.no_telepon,
-          notes: item.notes
-        }));
-      } else if (r.items && typeof r.items === 'string') {
+      if (r.items && typeof r.items === 'string') {
         try { r.items = JSON.parse(r.items); } catch(e) {}
       }
 
@@ -95,23 +71,7 @@ class TransactionModel {
     const r = rows[0];
     r.sertakan_tanda_tangan = r.sertakan_tanda_tangan ? 1 : 0;
 
-    const [itemsRows] = await pool.query(
-      `SELECT * FROM transaction_items WHERE transaction_id = ?`,
-      [id]
-    );
-    if (itemsRows.length > 0) {
-      r.items = itemsRows.map(item => ({
-        tanggal: item.tanggal,
-        tipe: item.tipe,
-        statusPembayaran: item.status_pembayaran,
-        jumlah: item.jumlah,
-        kuantitas: item.kuantitas,
-        diskon: item.diskon,
-        namaPembeli: item.nama_pembeli,
-        noTelepon: item.no_telepon,
-        notes: item.notes
-      }));
-    } else if (r.items && typeof r.items === 'string') {
+    if (r.items && typeof r.items === 'string') {
       try { r.items = JSON.parse(r.items); } catch(e) {}
     }
 
@@ -130,18 +90,6 @@ class TransactionModel {
     const r = rows[0];
     r.sertakan_tanda_tangan = r.sertakan_tanda_tangan ? 1 : 0;
 
-    const [itemsRows] = await pool.query(
-      `SELECT * FROM transaction_items WHERE transaction_id = ?`,
-      [r.id]
-    );
-    if (itemsRows.length > 0) {
-      r.items = itemsRows.map(item => ({
-        tanggal: item.tanggal,
-        tipe: item.tipe,
-        statusPembayaran: item.status_pembayaran,
-        jumlah: item.jumlah,
-        kuantitas: item.kuantitas,
-        diskon: item.diskon,
         namaPembeli: item.nama_pembeli,
         noTelepon: item.no_telepon,
         notes: item.notes
@@ -189,34 +137,6 @@ class TransactionModel {
     );
     
     const transactionId = result.insertId;
-
-    // INSERT into transaction_items table
-    if (items) {
-      let parsedItems = items;
-      if (typeof items === 'string') {
-        try { parsedItems = JSON.parse(items); } catch(e) {}
-      }
-      
-      if (Array.isArray(parsedItems) && parsedItems.length > 0) {
-        const values = parsedItems.map(item => [
-          transactionId,
-          item.tanggal || null,
-          item.tipe || null,
-          item.statusPembayaran || item.status_pembayaran || null,
-          Number(String(item.jumlah || 0).replace(/\D/g, '')) || 0,
-          Number(item.kuantitas) || 1,
-          Number(String(item.diskon || 0).replace(/\D/g, '')) || 0,
-          item.namaPembeli || item.nama_pembeli || null,
-          item.noTelepon || item.no_telepon || null,
-          item.notes || null
-        ]);
-
-        await pool.query(
-          `INSERT INTO transaction_items (transaction_id, tanggal, tipe, status_pembayaran, jumlah, kuantitas, diskon, nama_pembeli, no_telepon, notes) VALUES ?`,
-          [values]
-        );
-      }
-    }
 
     return transactionId;
   }
@@ -269,36 +189,6 @@ class TransactionModel {
         id
       ]
     );
-
-    // UPDATE transaction_items table (delete old and insert new)
-    await pool.query('DELETE FROM transaction_items WHERE transaction_id = ?', [id]);
-    
-    if (items) {
-      let parsedItems = items;
-      if (typeof items === 'string') {
-        try { parsedItems = JSON.parse(items); } catch(e) {}
-      }
-      
-      if (Array.isArray(parsedItems) && parsedItems.length > 0) {
-        const values = parsedItems.map(item => [
-          id,
-          item.tanggal || null,
-          item.tipe || null,
-          item.statusPembayaran || item.status_pembayaran || null,
-          Number(String(item.jumlah || 0).replace(/\D/g, '')) || 0,
-          Number(item.kuantitas) || 1,
-          Number(String(item.diskon || 0).replace(/\D/g, '')) || 0,
-          item.namaPembeli || item.nama_pembeli || null,
-          item.noTelepon || item.no_telepon || null,
-          item.notes || null
-        ]);
-
-        await pool.query(
-          `INSERT INTO transaction_items (transaction_id, tanggal, tipe, status_pembayaran, jumlah, kuantitas, diskon, nama_pembeli, no_telepon, notes) VALUES ?`,
-          [values]
-        );
-      }
-    }
 
   }
 }

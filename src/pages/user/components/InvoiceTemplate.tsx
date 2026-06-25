@@ -1,5 +1,5 @@
 import React from "react";
-import logoKb from "../../../assests/logo kb.jpeg";
+import logoKb from "../../../assets/logo kb.jpeg";
 
 
 interface InvoiceItem {

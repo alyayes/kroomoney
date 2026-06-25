@@ -63,7 +63,7 @@ export default function TransactionInput({
   const handleAddItem = () => {
     setForm(f => {
       const currentItems = f.items || [];
-      let newItems = [...currentItems];
+      const newItems = [...currentItems];
       
       if (currentItems.length === 0) {
         newItems.push({
@@ -77,19 +77,30 @@ export default function TransactionInput({
           noTelepon: f.noTelepon || "",
           notes: f.notes || ""
         });
+        newItems.push({
+          tanggal: f.tanggal,
+          tipe: f.tipe,
+          statusPembayaran: f.statusPembayaran,
+          jumlah: "0",
+          kuantitas: "1",
+          diskon: "0",
+          namaPembeli: f.namaPembeli || "",
+          noTelepon: f.noTelepon || "",
+          notes: ""
+        });
+      } else {
+        newItems.push({
+          tanggal: f.tanggal,
+          tipe: f.tipe,
+          statusPembayaran: f.statusPembayaran,
+          jumlah: "0",
+          kuantitas: "1",
+          diskon: "0",
+          namaPembeli: f.namaPembeli || "",
+          noTelepon: f.noTelepon || "",
+          notes: ""
+        });
       }
-
-      newItems.push({
-        tanggal: f.tanggal,
-        tipe: f.tipe,
-        statusPembayaran: f.statusPembayaran,
-        jumlah: "0",
-        kuantitas: "1",
-        diskon: "0",
-        namaPembeli: f.namaPembeli || "",
-        noTelepon: f.noTelepon || "",
-        notes: ""
-      });
 
       const totalAmount = newItems.reduce((acc, curr) => acc + (parseDecimalInput(curr.jumlah) * Number(curr.kuantitas)), 0);
       const totalQty = newItems.reduce((acc, curr) => acc + Number(curr.kuantitas), 0);
@@ -145,9 +156,9 @@ export default function TransactionInput({
       return {
         ...f,
         items: newItems,
-        jumlah: totalAmount > 0 ? totalAmount.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : "",
-        kuantitas: totalQty > 0 ? totalQty.toString() : "1",
-        diskon: totalDiscount > 0 ? totalDiscount.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : "0"
+        jumlah: newItems.length > 0 ? totalAmount.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : f.jumlah,
+        kuantitas: newItems.length > 0 ? totalQty.toString() : f.kuantitas,
+        diskon: newItems.length > 0 ? totalDiscount.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : f.diskon
       };
     });
   };
@@ -343,7 +354,7 @@ export default function TransactionInput({
                         </span>
                         <div className="flex items-center gap-4">
                           <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                            Subtotal: <span className="font-extrabold text-slate-800">Rp{Math.max(0, (Number(item.jumlah.replace(/\D/g, "")) * Number(item.kuantitas)) - Number(item.diskon.replace(/\D/g, ""))).toLocaleString("id-ID")}</span>
+                            Subtotal: <span className="font-extrabold text-slate-800">Rp{Math.max(0, (Number(String(item.jumlah || 0).replace(/\D/g, "")) * Number(item.kuantitas)) - Number(String(item.diskon || 0).replace(/\D/g, ""))).toLocaleString("id-ID")}</span>
                           </span>
                           <button
                             type="button"
@@ -355,79 +366,7 @@ export default function TransactionInput({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
-                        {/* TANGGAL TRANSAKSI */}
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Tanggal Transaksi</label>
-                          <div className="relative">
-                            <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
-                            <input
-                              type="date"
-                              className="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold border-solid"
-                              value={item.tanggal}
-                              onChange={(e) => handleUpdateItem(index, 'tanggal', e.target.value)}
-                            />
-                          </div>
-                        </div>
-
-                        {/* TIPE TRANSAKSI */}
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Tipe Transaksi</label>
-                          <select
-                            className="w-full px-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold appearance-none cursor-pointer border-solid"
-                            value={item.tipe}
-                            onChange={(e) => handleUpdateItem(index, 'tipe', e.target.value as any)}
-                          >
-                            <option value="Debit">Debit (Uang Masuk / Pemasukan)</option>
-                            <option value="Kredit">Kredit (Uang Keluar / Pengeluaran)</option>
-                          </select>
-                        </div>
-
-                        {/* STATUS PEMBAYARAN */}
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Status Pembayaran</label>
-                          <select
-                            className="w-full px-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold appearance-none cursor-pointer border-solid"
-                            value={item.statusPembayaran}
-                            onChange={(e) => handleUpdateItem(index, 'statusPembayaran', e.target.value as any)}
-                          >
-                            <option value="Lunas">Lunas</option>
-                            <option value="Pending">Pending</option>
-                            <option value="Belum Lunas">Belum Lunas</option>
-                            <option value="DP">DP (Down Payment)</option>
-                          </select>
-                        </div>
-
-                        {/* NAMA PEMBELI / KETERANGAN */}
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Nama Pembeli / Keterangan</label>
-                          <div className="relative">
-                            <Quote className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
-                            <input
-                              type="text"
-                              placeholder="e.g. Dian Nugraha"
-                              className="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold border-solid"
-                              value={item.namaPembeli}
-                              onChange={(e) => handleUpdateItem(index, 'namaPembeli', e.target.value)}
-                            />
-                          </div>
-                        </div>
-
-                        {/* NO WHATSAPP PEMBELI */}
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">No WhatsApp Pembeli</label>
-                          <div className="relative">
-                            <Phone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
-                            <input
-                              type="text"
-                              placeholder="e.g. 0812XXXXXXXX"
-                              className="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold border-solid"
-                              value={item.noTelepon}
-                              onChange={(e) => handleUpdateItem(index, 'noTelepon', e.target.value)}
-                            />
-                          </div>
-                        </div>
-
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-left">
                         {/* JUMLAH NOMINAL (RUPIAH) */}
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Jumlah Nominal (Rupiah)</label>
@@ -464,9 +403,9 @@ export default function TransactionInput({
                           />
                         </div>
 
-                        {/* CATATAN TAMBAHAN (NOTES) */}
-                        <div className="space-y-2 lg:col-span-3">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Catatan Tambahan (Notes)</label>
+                        {/* CATATAN ITEM */}
+                        <div className="space-y-2 sm:col-span-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Catatan Item</label>
                           <div className="relative">
                             <Tag className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
                             <input

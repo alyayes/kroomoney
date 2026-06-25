@@ -112,7 +112,9 @@ export default function UserDashboard({
     pctOperasionalBudget,
     pctServerBudget,
     downloadingId,
-    handleDownloadDocumentPdf
+    handleDownloadDocumentPdf,
+    isDownloadingReport,
+    handleDownloadReportPdf
   } = useUserDashboard({
     profile,
     setProfile,
@@ -125,20 +127,48 @@ export default function UserDashboard({
   const items = form.items || [];
 
   const handleAddItem = () => {
-    const newItems = [
-      ...items,
-      {
+    let newItems = [];
+    if (items.length === 0) {
+      const item1 = {
+        tanggal: form.tanggal,
+        tipe: form.tipe,
+        statusPembayaran: form.statusPembayaran,
+        jumlah: form.jumlah || "0",
+        kuantitas: form.kuantitas || "1",
+        diskon: form.diskon || "0",
+        namaPembeli: form.namaPembeli || "",
+        noTelepon: form.noTelepon || "",
+        notes: form.notes || ""
+      };
+      const item2 = {
         tanggal: form.tanggal,
         tipe: form.tipe,
         statusPembayaran: form.statusPembayaran,
         jumlah: "0",
         kuantitas: "1",
         diskon: "0",
-        namaPembeli: "",
-        noTelepon: "",
+        namaPembeli: form.namaPembeli || "",
+        noTelepon: form.noTelepon || "",
         notes: ""
-      }
-    ];
+      };
+      newItems = [item1, item2];
+    } else {
+      newItems = [
+        ...items,
+        {
+          tanggal: form.tanggal,
+          tipe: form.tipe,
+          statusPembayaran: form.statusPembayaran,
+          jumlah: "0",
+          kuantitas: "1",
+          diskon: "0",
+          namaPembeli: form.namaPembeli || "",
+          noTelepon: form.noTelepon || "",
+          notes: ""
+        }
+      ];
+    }
+
     const totalAmount = newItems.reduce((acc, curr) => acc + (parseDecimalInput(curr.jumlah) * Number(curr.kuantitas)), 0);
     const totalQty = newItems.reduce((acc, curr) => acc + Number(curr.kuantitas), 0);
     const totalDiscount = newItems.reduce((acc, curr) => acc + parseDecimalInput(curr.diskon), 0);
@@ -180,6 +210,27 @@ export default function UserDashboard({
 
   const handleRemoveItem = (index: number) => {
     const newItems = items.filter((_, idx) => idx !== index);
+    
+    if (newItems.length <= 1) {
+      const remainingItem = newItems[0];
+      if (remainingItem) {
+        setForm(f => ({
+          ...f,
+          items: [],
+          jumlah: remainingItem.jumlah,
+          kuantitas: remainingItem.kuantitas,
+          diskon: remainingItem.diskon,
+          notes: remainingItem.notes
+        }));
+      } else {
+        setForm(f => ({
+          ...f,
+          items: []
+        }));
+      }
+      return;
+    }
+
     const totalAmount = newItems.reduce((acc, curr) => acc + (parseDecimalInput(curr.jumlah) * Number(curr.kuantitas)), 0);
     const totalQty = newItems.reduce((acc, curr) => acc + Number(curr.kuantitas), 0);
     const totalDiscount = newItems.reduce((acc, curr) => acc + parseDecimalInput(curr.diskon), 0);
@@ -187,9 +238,9 @@ export default function UserDashboard({
     setForm(f => ({
       ...f,
       items: newItems,
-      jumlah: totalAmount > 0 ? totalAmount.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : "",
-      kuantitas: totalQty > 0 ? totalQty.toString() : "1",
-      diskon: totalDiscount > 0 ? totalDiscount.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : "0"
+      jumlah: totalAmount.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 4 }),
+      kuantitas: totalQty.toString(),
+      diskon: totalDiscount.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 4 })
     }));
   };
 
@@ -338,6 +389,7 @@ export default function UserDashboard({
                 />
               ) : activeMenu === "Financial Reports" ? (
                 <ReportPanel
+                  allTransactions={transactions}
                   filteredTransactions={filteredTransactions}
                   searchTerm={searchTerm}
                   setSearchTerm={setSearchTerm}
@@ -353,6 +405,9 @@ export default function UserDashboard({
                   setSelectedDocType={setSelectedDocType}
                   handleDownloadDocumentPdf={handleDownloadDocumentPdf}
                   downloadingId={downloadingId}
+                  handleDownloadReportPdf={handleDownloadReportPdf}
+                  isDownloadingReport={isDownloadingReport}
+                  aiInsight={aiInsight}
                 />
               ) : activeMenu === "Profile" ? (
                 <UserProfile
@@ -477,7 +532,7 @@ export default function UserDashboard({
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-[2rem] p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative my-8"
+              className="bg-white rounded-[2rem] p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative my-8 max-h-[90vh] overflow-y-auto"
             >
               <div className="absolute top-0 right-0 w-48 h-48 bg-blue-50 rounded-full blur-3xl -mr-24 -mt-24 -z-10" />
 
@@ -604,7 +659,7 @@ export default function UserDashboard({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Jumlah Nominal (Rupiah)</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Harga Satuan (Rupiah)</label>
                   <input
                     type="text"
                     readOnly={items.length > 0}
@@ -697,12 +752,12 @@ export default function UserDashboard({
                       {items.map((item, index) => (
                         <div key={index} className="bg-slate-50/50 border border-slate-100 rounded-[2rem] p-6 relative overflow-hidden text-left">
                           <div className="flex justify-between items-center mb-6">
-                            <span className="text-xs font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100/50">
+<span className="text-xs font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100/50">
                               Item #{index + 1}
                             </span>
                             <div className="flex items-center gap-4">
                               <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                                Subtotal: <span className="font-extrabold text-slate-800">Rp{Math.max(0, (Number(item.jumlah.replace(/\D/g, "")) * Number(item.kuantitas)) - Number(item.diskon.replace(/\D/g, ""))).toLocaleString("id-ID")}</span>
+                                Subtotal: <span className="font-extrabold text-slate-800">Rp{Math.max(0, (Number(String(item.jumlah || 0).replace(/\D/g, "")) * Number(item.kuantitas)) - Number(String(item.diskon || 0).replace(/\D/g, ""))).toLocaleString("id-ID")}</span>
                               </span>
                               <button
                                 type="button"
@@ -714,82 +769,10 @@ export default function UserDashboard({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
-                            {/* TANGGAL TRANSAKSI */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Tanggal Transaksi</label>
-                              <div className="relative">
-                                <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
-                                <input
-                                  type="date"
-                                  className="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold border-solid"
-                                  value={item.tanggal}
-                                  onChange={(e) => handleUpdateItem(index, 'tanggal', e.target.value)}
-                                />
-                              </div>
-                            </div>
-
-                            {/* TIPE TRANSAKSI */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Tipe Transaksi</label>
-                              <select
-                                className="w-full px-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold appearance-none cursor-pointer border-solid font-sans text-slate-900"
-                                value={item.tipe}
-                                onChange={(e) => handleUpdateItem(index, 'tipe', e.target.value as any)}
-                              >
-                                <option value="Debit">Debit (Uang Masuk / Pemasukan)</option>
-                                <option value="Kredit">Kredit (Uang Keluar / Pengeluaran)</option>
-                              </select>
-                            </div>
-
-                            {/* STATUS PEMBAYARAN */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Status Pembayaran</label>
-                              <select
-                                className="w-full px-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold appearance-none cursor-pointer border-solid font-sans text-slate-900"
-                                value={item.statusPembayaran}
-                                onChange={(e) => handleUpdateItem(index, 'statusPembayaran', e.target.value as any)}
-                              >
-                                <option value="Lunas">Lunas</option>
-                                <option value="Pending">Pending</option>
-                                <option value="Belum Lunas">Belum Lunas</option>
-                                <option value="DP">DP (Down Payment)</option>
-                              </select>
-                            </div>
-
-                            {/* NAMA PEMBELI / KETERANGAN */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Nama Pembeli / Keterangan</label>
-                              <div className="relative">
-                                <Quote className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Dian Nugraha"
-                                  className="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold border-solid"
-                                  value={item.namaPembeli}
-                                  onChange={(e) => handleUpdateItem(index, 'namaPembeli', e.target.value)}
-                                />
-                              </div>
-                            </div>
-
-                            {/* NO WHATSAPP PEMBELI */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">No WhatsApp Pembeli</label>
-                              <div className="relative">
-                                <Phone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
-                                <input
-                                  type="text"
-                                  placeholder="e.g. 0812XXXXXXXX"
-                                  className="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm font-bold border-solid"
-                                  value={item.noTelepon}
-                                  onChange={(e) => handleUpdateItem(index, 'noTelepon', e.target.value)}
-                                />
-                              </div>
-                            </div>
-
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
                             {/* JUMLAH NOMINAL (RUPIAH) */}
                             <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Jumlah Nominal (Rupiah)</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Harga Satuan (Rupiah)</label>
                               <input
                                 type="text"
                                 placeholder="0"
@@ -823,9 +806,9 @@ export default function UserDashboard({
                               />
                             </div>
 
-                            {/* CATATAN TAMBAHAN (NOTES) */}
-                            <div className="space-y-2 lg:col-span-3">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Catatan Tambahan (Notes)</label>
+                            {/* CATATAN ITEM */}
+                            <div className="space-y-2 sm:col-span-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Catatan Item</label>
                               <div className="relative">
                                 <Tag className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
                                 <input
@@ -908,7 +891,7 @@ export default function UserDashboard({
               {/* Document Content wrapper */}
               <div className="w-full overflow-x-auto flex justify-center">
                 <div 
-                  className="p-12 font-sans text-slate-800 relative bg-white flex flex-col justify-between box-border" 
+                  className={`${selectedDocType === "Kwitansi" ? "p-0" : "p-12"} font-sans text-slate-800 relative bg-white flex flex-col justify-between box-border`}
                   style={{ 
                     width: selectedDocType === "Kwitansi" ? "1123px" : "900px", 
                     height: selectedDocType === "Kwitansi" ? "794px" : "auto",
@@ -918,89 +901,129 @@ export default function UserDashboard({
                 >
                   {selectedDocType === "Kwitansi" ? (
                     /* ====== KWITANSI DESIGN ====== */
-                    <div className="border border-slate-400 h-full flex flex-col font-sans text-slate-900 box-border" style={{ fontFamily: 'Georgia, serif' }}>
+                    <div 
+                      className="h-full bg-white flex flex-col font-sans text-slate-900 box-border relative"
+                      style={{
+                        paddingLeft: "85px",
+                        paddingRight: "85px",
+                        paddingTop: "65px",
+                        paddingBottom: "65px"
+                      }}
+                    >
                       {/* Header */}
-                      <div className="flex items-center justify-between px-8 pt-6 pb-4 border-b border-slate-400">
-                        <div className="flex items-center gap-3">
-                          <img src={logoKb} alt="KroomBox Logo" className="h-20 object-contain" />
-                          <div className="flex flex-col leading-none">
-                            <span className="text-[22px] font-black text-[#1a3a6b]">KroomBox</span>
-                            <span className="text-[9px] font-bold text-slate-400 tracking-wider mt-1 uppercase">FINANCE & CLOUD SOLUTIONS</span>
-                          </div>
+                      <div className="flex items-center border-b-2 border-[#1a3a6b] pb-4 mb-12 relative h-36 w-full">
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center">
+                          <img src={logoKb} alt="KroomBox Logo" className="h-32 object-contain mix-blend-multiply" />
                         </div>
-                        <h1 className="text-xl font-black uppercase tracking-[0.15em] text-[#1a3a6b] border-b-2 border-[#1a3a6b] pb-1">
+                        <div className="w-full text-center text-2xl font-extrabold text-[#0b2559] tracking-widest uppercase pl-[160px] pr-[290px]">
                           KWITANSI PEMBAYARAN
-                        </h1>
-                        <div className="w-40" />
-                      </div>
-
-                      {/* No & Tanggal */}
-                      <div className="flex justify-between px-8 py-4 text-sm">
-                        <span>No. : <span className="font-bold font-mono">{selectedReceipt.trxId.split('-')[1] || selectedReceipt.id}</span></span>
-                        <span>Tanggal : <span className="font-bold">{new Date(selectedReceipt.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span></span>
+                        </div>
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 text-right text-[10px] text-slate-500 font-semibold leading-relaxed max-w-[280px]">
+                          <div className="font-extrabold text-[#0b2559] text-xs uppercase tracking-wider mb-0.5">KroomBox</div>
+                          <div>Ko+Lab Hub Studio, Gd. Selaru lt. 4 Universitas Telkom</div>
+                          <div>kroombox.com | kroombox11@gmail.com</div>
+                        </div>
                       </div>
 
                       {/* Body */}
-                      <div className="flex-grow px-8 py-2 space-y-5 text-sm">
-                        <div className="flex gap-2">
-                          <span className="min-w-[200px] text-slate-600">Terima Dari</span>
-                          <span>: <strong className="text-slate-900 ml-1">{selectedReceipt.namaPembeli}</strong></span>
-                        </div>
-                        <div className="flex gap-2">
-                          <span className="min-w-[200px] text-slate-600">Terbilang</span>
-                          <span>: <strong className="ml-1">{terbilang(Math.ceil(selectedReceipt.jumlah * selectedReceipt.kuantitas) - (selectedReceipt.diskon || 0))} Rupiah</strong></span>
-                        </div>
-                        <div className="flex gap-2">
-                          <span className="min-w-[200px] text-slate-600">Untuk Pembayaran</span>
-                          <span>: <strong className="ml-1">{selectedReceipt.notes || "Nota Terlampir"}</strong></span>
-                        </div>
-                        {selectedReceipt.diskon > 0 && (
-                          <>
-                            <div className="flex gap-2">
-                              <span className="min-w-[200px] text-slate-600">Jumlah Sebelum Diskon</span>
-                              <span>: <span className="ml-1">Rp{Math.ceil(selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}</span></span>
+                      <div className="flex-grow flex flex-col gap-5 text-base">
+                        <div className="flex justify-between w-full">
+                          <div className="flex w-[65%]">
+                            <div className="w-44 text-slate-900">No. Kwitansi</div>
+                            <div className="w-5 text-slate-900">:</div>
+                            <div className="flex-1 font-semibold">
+                              {`KWT-${selectedReceipt.tanggal ? selectedReceipt.tanggal.substring(0, 10).replace(/-/g, '') : new Date().toLocaleDateString('en-CA').replace(/-/g, '')}-${String(selectedReceipt.trxId?.split('-')[1] || selectedReceipt.id).replace(/\D/g, "").padStart(4, '0') || "0001"}`}
                             </div>
-                            <div className="flex gap-2 text-red-600 font-semibold">
-                              <span className="min-w-[200px]">Diskon</span>
-                              <span>: <span className="ml-1">- Rp{(selectedReceipt.diskon).toLocaleString('id-ID')}</span></span>
+                          </div>
+                          <div className="flex w-[35%] justify-end">
+                            <div className="w-28 text-slate-900">Tanggal</div>
+                            <div className="w-5 text-slate-900">:</div>
+                            <div className="w-36 font-semibold">
+                              {selectedReceipt.tanggal
+                                ? (() => {
+                                    const [year, month, day] = selectedReceipt.tanggal.substring(0, 10).split('-').map(Number);
+                                    return new Date(year, month - 1, day).toLocaleDateString('id-ID', {
+                                      day: 'numeric',
+                                      month: 'long',
+                                      year: 'numeric'
+                                    });
+                                  })()
+                                : new Date().toLocaleDateString('id-ID', {
+                                    day: 'numeric',
+                                    month: 'long',
+                                    year: 'numeric'
+                                  })}
                             </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Footer */}
-                      <div className="flex justify-between items-end px-8 pb-8 mt-4">
-                        {/* Big amount */}
-                        <div className="text-4xl font-black tracking-tight text-slate-900">
-                          Rp{(Math.ceil(selectedReceipt.jumlah * selectedReceipt.kuantitas) - (selectedReceipt.diskon || 0)).toLocaleString('id-ID')},-
+                          </div>
                         </div>
 
-                        {/* Signature */}
-                        <div className="text-center w-[220px] flex flex-col items-center relative">
-                          <p className="text-xs text-slate-600 mb-1">
-                            Bandung, {new Date(selectedReceipt.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                          </p>
-                          <div className="relative w-full h-20 flex items-center justify-center">
-                            {/* Logo watermark behind signature */}
-                            <div className="absolute inset-0 flex items-center justify-center opacity-10">
-                              <img src={logoKb} alt="Watermark" className="max-h-16 object-contain" />
-                            </div>
-                            {profile.tandaTangan ? (
-                              <img
-                                src={profile.tandaTangan}
-                                alt="Tanda Tangan"
-                                className="relative z-10 max-h-16 max-w-[180px] object-contain mix-blend-multiply select-none"
-                              />
+                        <div className="flex">
+                          <div className="w-44 text-slate-900">Telah diterima dari</div>
+                          <div className="w-5 text-slate-900">:</div>
+                          <div className="flex-1 font-semibold uppercase">{selectedReceipt.namaPembeli}</div>
+                        </div>
+
+                        <div className="flex">
+                          <div className="w-44 text-slate-900">Uang Sejumlah</div>
+                          <div className="w-5 text-slate-900">:</div>
+                          <div className="flex-1 font-bold text-xl">Rp {(Math.ceil(selectedReceipt.items && selectedReceipt.items.length > 0 ? selectedReceipt.jumlah : selectedReceipt.jumlah * selectedReceipt.kuantitas) - (selectedReceipt.diskon || 0)).toLocaleString('id-ID')}</div>
+                        </div>
+
+                        <div className="flex">
+                          <div className="w-44 text-slate-900">Untuk Keperluan</div>
+                          <div className="w-5 text-slate-900">:</div>
+                          <div className="flex-1 font-semibold">
+                            {selectedReceipt.items && selectedReceipt.items.length > 0 ? (
+                              (() => {
+                                const mapped = selectedReceipt.items.map(i => i.notes || i.deskripsi || i.namaPembeli || "").filter(Boolean);
+                                if (mapped.length === 0) return selectedReceipt.notes || "Nota Terlampir";
+                                if (mapped.length === 1) return mapped[0];
+                                if (mapped.length === 2) return `${mapped[0]} dan ${mapped[1]}`;
+                                return `${mapped.slice(0, -1).join(', ')}, dan ${mapped[mapped.length - 1]}`;
+                              })()
                             ) : (
-                              <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider text-center relative z-10">
-                                Tanda Tangan Bendahara
-                              </span>
+                              selectedReceipt.notes || "Nota Terlampir"
                             )}
                           </div>
-                          <p className="text-xs font-extrabold text-slate-800 border-b border-slate-800 pb-0.5 px-4 mt-1">
-                            {profile.nama}
-                          </p>
                         </div>
+
+                        <div className="flex items-start mt-0">
+                          <div className="w-44 text-slate-900">Terbilang</div>
+                          <div className="w-5 text-slate-900">:</div>
+                          <div className="flex-1 italic font-semibold">{terbilang(Math.ceil(selectedReceipt.items && selectedReceipt.items.length > 0 ? selectedReceipt.jumlah : selectedReceipt.jumlah * selectedReceipt.kuantitas) - (selectedReceipt.diskon || 0))} Rupiah</div>
+                        </div>
+                      </div>
+
+                      {/* Signature Absolute */}
+                      <div className="absolute bottom-[35px] right-[85px] w-64 text-center flex flex-col items-center">
+                        <p className="text-sm font-bold text-slate-900 mb-1">
+                          Bandung, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                        <p className="text-base font-medium text-slate-900 mb-1">
+                          Yang Menerima
+                        </p>
+                        <div className="h-24 w-full flex items-center justify-center my-1 relative">
+                          {/* Cap Logo KroomBox di belakang TTD */}
+                          <img
+                            src={logoKb}
+                            alt="Cap KroomBox"
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 object-contain mix-blend-multiply"
+                            style={{ opacity: 0.25, zIndex: 0 }}
+                          />
+                          {profile.tandaTangan ? (
+                            <img
+                              src={profile.tandaTangan}
+                              alt="Tanda Tangan"
+                              className="max-h-24 object-contain mix-blend-multiply relative"
+                              style={{ zIndex: 1 }}
+                            />
+                          ) : (
+                            <div className="h-24"></div>
+                          )}
+                        </div>
+                        <p className="text-base font-bold text-slate-900">
+                          {profile.nama}
+                        </p>
                       </div>
                     </div>
                   ) : (
@@ -1008,10 +1031,14 @@ export default function UserDashboard({
                     (() => {
                       const invoiceNumber = (() => {
                         try {
-                          const d = new Date(selectedReceipt.tanggal);
-                          const yyyymmdd = d.getFullYear() +
-                            String(d.getMonth() + 1).padStart(2, '0') +
-                            String(d.getDate()).padStart(2, '0');
+                          const yyyymmdd = selectedReceipt.tanggal
+                            ? selectedReceipt.tanggal.substring(0, 10).replace(/-/g, '')
+                            : (() => {
+                                const today = new Date();
+                                return today.getFullYear() +
+                                  String(today.getMonth() + 1).padStart(2, '0') +
+                                  String(today.getDate()).padStart(2, '0');
+                              })();
                           const rawCode = selectedReceipt.trxId.split('-')[1] || selectedReceipt.id;
                           const code = rawCode.replace(/\D/g, "") || "1001";
                           return `INV/${yyyymmdd}/MPL/${code}`;
@@ -1092,8 +1119,8 @@ export default function UserDashboard({
                                <table className="w-full border-collapse">
                                  <thead>
                                    <tr className="text-[11px] uppercase tracking-wider text-white font-bold select-none">
-                                     <th className="bg-[#1a3a6b] py-3 px-4 text-left w-7/12 font-extrabold rounded-l-lg">INFO PRODUK</th>
-                                     <th className="bg-[#1a3a6b] py-3 px-4 text-center w-1/12 font-extrabold">JUMLAH</th>
+                                     <th className="bg-[#1a3a6b] py-3 px-4 text-left w-6/12 font-extrabold rounded-l-lg">INFO PRODUK</th>
+                                     <th className="bg-[#1a3a6b] py-3 px-4 text-center w-1/12 font-extrabold">QTY</th>
                                      <th className="bg-[#1a3a6b] py-3 px-4 text-right w-2/12 font-extrabold">HARGA SATUAN</th>
                                      <th className="bg-[#1a3a6b] py-3 px-4 text-right w-2/12 font-extrabold rounded-r-lg">TOTAL HARGA</th>
                                    </tr>
@@ -1101,7 +1128,7 @@ export default function UserDashboard({
                                  <tbody>
                                     {selectedReceipt.items && selectedReceipt.items.length > 0 ? (
                                       selectedReceipt.items.map((item, idx) => {
-                                        const deskripsiVal = item.namaPembeli || item.deskripsi || "Pembelian Produk / Layanan";
+                                        const deskripsiVal = item.notes || item.deskripsi || "Pembelian Produk / Layanan";
                                         const rawHarga = item.harga !== undefined ? item.harga : item.jumlah;
                                         const hargaVal = typeof rawHarga === 'number' 
                                           ? rawHarga 
@@ -1147,50 +1174,50 @@ export default function UserDashboard({
                                  </tbody>
                                </table>
                              </div>
+
+                             {/* Totals Section */}
+                             <div className="flex justify-end pt-4">
+                               <div className="w-[350px] text-[12px] space-y-3">
+                                 <div className="flex justify-between text-slate-600 font-bold border-b border-slate-100 pb-2">
+                                   <span className="uppercase text-[11px] tracking-wider text-slate-400">
+                                     TOTAL HARGA ({selectedReceipt.kuantitas} BARANG)
+                                   </span>
+                                   <span className="text-slate-800">
+                                     Rp{Math.ceil(selectedReceipt.items && selectedReceipt.items.length > 0 ? selectedReceipt.jumlah : selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}
+                                   </span>
+                                 </div>
+                                 {selectedReceipt.diskon > 0 && (
+                                   <div className="flex justify-between text-red-600 font-bold border-b border-slate-100 pb-2">
+                                     <span className="uppercase text-[11px] tracking-wider text-red-400">
+                                       DISKON
+                                     </span>
+                                     <span>
+                                       - Rp{selectedReceipt.diskon.toLocaleString('id-ID')}
+                                     </span>
+                                   </div>
+                                 )}
+                                 <div className="flex justify-between text-[#1a3a6b] font-bold border-b border-slate-100 pb-2">
+                                   <span className="uppercase text-[11px] tracking-wider text-slate-400">
+                                     TOTAL BELANJA
+                                   </span>
+                                   <span className="text-slate-800">
+                                     Rp{Math.ceil((selectedReceipt.items && selectedReceipt.items.length > 0 ? selectedReceipt.jumlah : selectedReceipt.jumlah * selectedReceipt.kuantitas) - (selectedReceipt.diskon || 0)).toLocaleString('id-ID')}
+                                   </span>
+                                 </div>
+                                 <div className="flex justify-between items-center py-2 border-t-2 border-b-2 border-slate-200">
+                                   <span className="font-extrabold text-slate-800 uppercase text-[12px] tracking-wider">
+                                     TOTAL TAGIHAN
+                                   </span>
+                                   <span className="font-black text-lg text-[#1a3a6b]">
+                                     Rp{Math.ceil((selectedReceipt.items && selectedReceipt.items.length > 0 ? selectedReceipt.jumlah : selectedReceipt.jumlah * selectedReceipt.kuantitas) - (selectedReceipt.diskon || 0)).toLocaleString('id-ID')}
+                                   </span>
+                                 </div>
+                               </div>
+                             </div>
                           </div>
 
                           {/* Bottom Section */}
                           <div className="space-y-8">
-                            {/* Totals Section */}
-                            <div className="flex justify-end pt-4">
-                              <div className="w-[350px] text-[12px] space-y-3">
-                                <div className="flex justify-between text-slate-600 font-bold border-b border-slate-100 pb-2">
-                                  <span className="uppercase text-[11px] tracking-wider text-slate-400">
-                                    TOTAL HARGA ({selectedReceipt.kuantitas} BARANG)
-                                  </span>
-                                  <span className="text-slate-800">
-                                    Rp{Math.ceil(selectedReceipt.items && selectedReceipt.items.length > 0 ? selectedReceipt.jumlah : selectedReceipt.jumlah * selectedReceipt.kuantitas).toLocaleString('id-ID')}
-                                  </span>
-                                </div>
-                                {selectedReceipt.diskon > 0 && (
-                                  <div className="flex justify-between text-red-600 font-bold border-b border-slate-100 pb-2">
-                                    <span className="uppercase text-[11px] tracking-wider text-red-400">
-                                      DISKON
-                                    </span>
-                                    <span>
-                                      - Rp{selectedReceipt.diskon.toLocaleString('id-ID')}
-                                    </span>
-                                  </div>
-                                )}
-                                <div className="flex justify-between text-[#1a3a6b] font-bold border-b border-slate-100 pb-2">
-                                  <span className="uppercase text-[11px] tracking-wider text-slate-400">
-                                    TOTAL BELANJA
-                                  </span>
-                                  <span className="text-slate-800">
-                                    Rp{Math.ceil((selectedReceipt.items && selectedReceipt.items.length > 0 ? selectedReceipt.jumlah : selectedReceipt.jumlah * selectedReceipt.kuantitas) - (selectedReceipt.diskon || 0)).toLocaleString('id-ID')}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center py-2 border-t-2 border-b-2 border-slate-200">
-                                  <span className="font-extrabold text-slate-800 uppercase text-[12px] tracking-wider">
-                                    TOTAL TAGIHAN
-                                  </span>
-                                  <span className="font-black text-lg text-[#1a3a6b]">
-                                    Rp{Math.ceil((selectedReceipt.items && selectedReceipt.items.length > 0 ? selectedReceipt.jumlah : selectedReceipt.jumlah * selectedReceipt.kuantitas) - (selectedReceipt.diskon || 0)).toLocaleString('id-ID')}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
                             {/* Payment Method & Metadata */}
                             <div className="flex justify-between items-end border-t border-slate-100 pt-6">
                               <div>

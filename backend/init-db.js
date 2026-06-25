@@ -9,7 +9,14 @@ const __dirname = path.dirname(__filename);
 
 export async function initializeDatabase() {
   try {
-    const sqlPath = path.join(__dirname, 'database-v7.sql');
+    // Check if the database tables already exist
+    const [tables] = await pool.query("SHOW TABLES LIKE 'users'");
+    if (tables.length > 0) {
+      console.log('ℹ️ MySQL Database already initialized. Skipping schema recreate.');
+      return;
+    }
+
+    const sqlPath = path.join(__dirname, 'kroomoney.sql');
     const sqlContent = fs.readFileSync(sqlPath, 'utf8');
     
     // Strip SQL comments line by line

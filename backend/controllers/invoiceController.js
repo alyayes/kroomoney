@@ -4,7 +4,7 @@ import ReceiptModel from '../models/receiptModel.js';
 import AuditLogModel from '../models/auditLogModel.js';
 import CashBookModel from '../models/cashBookModel.js';
 import { pool } from '../config/db.js';
-import { generateInvoicePdf, getInvoicePreviewHtml } from '../services/pdfService.js';
+import { generateInvoicePdf, getInvoicePreviewHtml, buildInvoiceHtml, buildKwitansiHtml, getCompanySettings, htmlToPdfBuffer, buildReportHtml } from '../services/pdfService.js';
 import { sendEmail } from '../services/emailService.js';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -14,6 +14,13 @@ import { onInvoiceGenerated, onTransactionPaid, onTransactionCancelled } from '.
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STORAGE_ROOT = join(__dirname, '..', 'storage');
+
+function formatItemList(items) {
+  if (!items || items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} dan ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, dan ${items[items.length - 1]}`;
+}
 
 // Helper: map invoice row to API response
 function mapInvoice(i) {
@@ -104,7 +111,6 @@ export const generateInvoice = async (req, res) => {
 
     const subtotal = hasItems ? trx.nominal_transfer : Math.ceil(trx.nominal_transfer * (trx.kuantitas || 1));
     const total = Math.max(0, subtotal - (diskon || 0));
-    const today = new Date().toISOString().split('T')[0];
 
     const { insertId, nomor_invoice } = await InvoiceModel.create({
       transaksi_id: transaksiId,
@@ -114,7 +120,7 @@ export const generateInvoice = async (req, res) => {
       subtotal,
       diskon: diskon || 0,
       total,
-      tanggal_terbit: today,
+      tanggal_terbit: trx.tanggal,
       tanggal_jatuh_tempo: tanggalJatuhTempo,
       catatan: catatan || null,
       catatan_internal: catatanInternal || null,
@@ -134,8 +140,8 @@ export const generateInvoice = async (req, res) => {
             const diskonNominal = Number(String(item.diskon || 0).replace(/\D/g, '')) || 0;
             const subtotal = Math.max(0, (hargaSatuan * kuantitas) - diskonNominal);
             return {
-              deskripsi: item.namaPembeli || item.deskripsi || 'Detail Layanan',
-              sub_deskripsi: item.notes || item.sub_deskripsi || null,
+              deskripsi: item.notes || item.deskripsi || 'Detail Layanan',
+              sub_deskripsi: null,
               kuantitas,
               harga_satuan: hargaSatuan,
               diskon_persen: item.diskon_persen ? Number(item.diskon_persen) : 0,
@@ -147,6 +153,16 @@ export const generateInvoice = async (req, res) => {
         console.error("Error parsing trx.items:", err);
       }
     }
+
+    // Filter out items with 0 price and duplicate/empty name to prevent rendering empty rows
+    invoiceItems = invoiceItems.filter(item => {
+      const price = Number(item.harga_satuan);
+      if (price === 0) {
+        const isNameEmptyOrDuplicate = !item.deskripsi || item.deskripsi.trim() === "" || item.deskripsi === (trx.nama_pelanggan || trx.nama_manual);
+        return !isNameEmptyOrDuplicate;
+      }
+      return true;
+    });
 
     if (invoiceItems.length === 0) {
       invoiceItems = [{
@@ -334,14 +350,21 @@ export const updateInvoiceStatus = async (req, res) => {
       const existingReceipt = await ReceiptModel.findByInvoiceId(id);
       if (!existingReceipt) {
         const [userRow] = await pool.query('SELECT nama_lengkap, tanda_tangan FROM users WHERE id = ?', [req.user.id]);
+        
+        const items = await InvoiceModel.findItemsByInvoiceId(id);
+        const autoKeterangan = items && items.length > 0
+          ? formatItemList(items.map(i => i.deskripsi).filter(Boolean))
+          : null;
+
         const { nomor_kwitansi, insertId } = await ReceiptModel.create({
           invoice_id: parseInt(id),
           pelanggan_id: inv.pelanggan_id || null,
           nama_manual: inv.nama_manual || null,
-          tanggal_terbit: new Date().toISOString().split('T')[0],
+          tanggal_terbit: inv.tanggal_terbit || new Date().toISOString().split('T')[0],
           nominal_diterima: inv.total,
           metode_pembayaran: 'Transfer Bank',
           diterima_oleh: userRow[0]?.nama_lengkap || 'Bendahara',
+          keterangan: autoKeterangan || null,
           created_by: req.user.id,
         });
         receiptId = insertId;
@@ -365,7 +388,7 @@ export const updateInvoiceStatus = async (req, res) => {
           amount: inv.total,
           category: 'hosting',
           description: `Income from Invoice ${inv.nomor_invoice}`,
-          entry_date: new Date().toISOString().split('T')[0],
+          entry_date: inv.tanggal_terbit || new Date().toISOString().split('T')[0],
           created_by: req.user.id
         });
       }
@@ -468,8 +491,6 @@ export const downloadInvoicePdfByTransactionId = async (req, res) => {
     // Determine if we need to auto-generate or heal the invoice
     if (!inv) {
       // Auto-generate invoice record
-      const today = new Date().toISOString().split('T')[0];
-      
       let hasItems = false;
       if (trx.items) {
         try {
@@ -491,8 +512,8 @@ export const downloadInvoicePdfByTransactionId = async (req, res) => {
         subtotal,
         diskon: 0,
         total,
-        tanggal_terbit: today,
-        tanggal_jatuh_tempo: today, // default to today
+        tanggal_terbit: trx.tanggal,
+        tanggal_jatuh_tempo: trx.tanggal, // default to trx date
         catatan: 'Auto-generated for download',
         catatan_internal: 'Auto-generated via direct download',
         created_by: req.user.id,
@@ -513,8 +534,8 @@ export const downloadInvoicePdfByTransactionId = async (req, res) => {
             const diskonNominal = Number(String(item.diskon || 0).replace(/\D/g, '')) || 0;
             const subtotal = Math.max(0, (hargaSatuan * kuantitas) - diskonNominal);
             return {
-              deskripsi: item.namaPembeli || item.deskripsi || 'Detail Layanan',
-              sub_deskripsi: item.notes || item.sub_deskripsi || null,
+              deskripsi: item.notes || item.deskripsi || 'Detail Layanan',
+              sub_deskripsi: null,
               kuantitas,
               harga_satuan: hargaSatuan,
               diskon_persen: item.diskon_persen ? Number(item.diskon_persen) : 0,
@@ -524,6 +545,16 @@ export const downloadInvoicePdfByTransactionId = async (req, res) => {
         }
       } catch (err) {}
     }
+
+    // Filter out items with 0 price and duplicate/empty name to prevent rendering empty rows
+    invoiceItems = invoiceItems.filter(item => {
+      const price = Number(item.harga_satuan);
+      if (price === 0) {
+        const isNameEmptyOrDuplicate = !item.deskripsi || item.deskripsi.trim() === "" || item.deskripsi === (trx.nama_pelanggan || trx.nama_manual);
+        return !isNameEmptyOrDuplicate;
+      }
+      return true;
+    });
 
     if (invoiceItems.length === 0) {
       invoiceItems = [{
@@ -567,3 +598,128 @@ export const downloadInvoicePdfByTransactionId = async (req, res) => {
     return res.status(500).json({ status: 'error', message: 'Gagal mengunduh PDF.' });
   }
 };
+
+export const generatePdfFromData = async (req, res) => {
+  try {
+    const { trx, docType, profile } = req.body;
+    if (!trx || !docType) {
+      return res.status(400).json({ status: 'error', message: 'Data transaksi dan tipe dokumen wajib diisi.' });
+    }
+
+    const company = await getCompanySettings();
+    const ttd = profile?.tandaTangan || null;
+
+    let html = '';
+    let filename = '';
+
+    if (docType === 'Invoice') {
+      const parsedJumlah = Number(String(trx.jumlah).replace(/\D/g, '')) || 0;
+      const parsedDiskon = Number(String(trx.diskon).replace(/\D/g, '')) || 0;
+      
+      const trxDateYmd = trx.tanggal.replace(/-/g, '');
+
+      const invoice = {
+        tanggal_terbit: trx.tanggal,
+        tanggal_jatuh_tempo: trx.tanggal,
+        nama_pelanggan: trx.namaPembeli,
+        no_whatsapp: trx.noTelepon,
+        nomor_invoice: `INV-${trxDateYmd}-MPL-${String(trx.trxId.split('-')[1] || trx.id).replace(/\D/g, "") || "1001"}`,
+        subtotal: (trx.items && trx.items.length > 0) ? parsedJumlah : parsedJumlah * (trx.kuantitas || 1),
+        diskon: parsedDiskon,
+        total: (trx.items && trx.items.length > 0) ? parsedJumlah - parsedDiskon : (parsedJumlah * (trx.kuantitas || 1)) - parsedDiskon,
+        catatan: trx.notes || '-'
+      };
+      
+      const items = (trx.items && trx.items.length > 0) ? trx.items.map(item => ({
+        deskripsi: item.notes || item.namaPembeli || 'Detail Layanan',
+        sub_deskripsi: null,
+        kuantitas: Number(item.kuantitas) || 1,
+        harga_satuan: Number(String(item.jumlah).replace(/\D/g, '')) || 0,
+        diskon_persen: Number(item.diskon) > 0 ? (Number(item.diskon) / (Number(String(item.jumlah).replace(/\D/g, '')) || 1)) * 100 : 0,
+        subtotal: (Number(String(item.jumlah).replace(/\D/g, '')) || 0) * (Number(item.kuantitas) || 1) - (Number(item.diskon) || 0)
+      })) : [{
+        deskripsi: trx.notes || 'Pembelian Layanan',
+        sub_deskripsi: null,
+        kuantitas: trx.kuantitas || 1,
+        harga_satuan: parsedJumlah,
+        diskon_persen: 0,
+        subtotal: parsedJumlah * (trx.kuantitas || 1)
+      }];
+
+      html = buildInvoiceHtml(invoice, items, company, ttd);
+      filename = `${invoice.nomor_invoice}.pdf`;
+    } else if (docType === 'Kwitansi') {
+      const parsedJumlah = Number(String(trx.jumlah).replace(/\D/g, '')) || 0;
+      const parsedDiskon = Number(String(trx.diskon).replace(/\D/g, '')) || 0;
+      const totalItemsAmount = (trx.items && trx.items.length > 0) ? trx.items.reduce((acc, item) => acc + ((Number(String(item.jumlah).replace(/\D/g, '')) || 0) * (Number(item.kuantitas) || 1) - (Number(item.diskon) || 0)), 0) : null;
+      const finalAmount = totalItemsAmount || ((parsedJumlah * (trx.kuantitas || 1)) - parsedDiskon);
+
+      const trxDateYmd = trx.tanggal.replace(/-/g, '');
+      const receipt = {
+        tanggal_terbit: trx.tanggal,
+        nama_manual: trx.namaPembeli,
+        nominal_diterima: finalAmount,
+        nomor_kwitansi: `KWT-${trxDateYmd}-${String(trx.trxId.split('-')[1] || trx.id).replace(/\D/g, "").padStart(4, '0') || "1001"}`,
+        keterangan: (trx.items && trx.items.length > 0) ? formatItemList(trx.items.map(i => i.notes || i.deskripsi || i.namaPembeli || "").filter(Boolean)) || trx.notes || 'Nota Terlampir' : trx.notes || 'Nota Terlampir'
+      };
+
+      const invoice = {
+        nomor_invoice: `INV-${trx.tanggal.replace(/-/g, '')}-MPL-${String(trx.trxId.split('-')[1] || trx.id).replace(/\D/g, "") || "1001"}`
+      };
+
+      const signerName = profile?.nama || profile?.nama_lengkap || profile?.namaLengkap || company.signerName;
+      html = buildKwitansiHtml(receipt, invoice, { ...company, signerName }, ttd);
+      filename = `${receipt.nomor_kwitansi}.pdf`;
+    } else {
+      return res.status(400).json({ status: 'error', message: 'Tipe dokumen tidak valid.' });
+    }
+
+    const pdfOptions = docType === 'Kwitansi' 
+      ? { format: 'A4', landscape: true }
+      : { format: 'A5', landscape: false };
+
+    const pdfBuffer = await htmlToPdfBuffer(html, pdfOptions);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(Buffer.from(pdfBuffer));
+  } catch (err) {
+    console.error('generatePdfFromData error:', err);
+    return res.status(500).json({ status: 'error', message: 'Gagal membuat dokumen PDF.' });
+  }
+};
+
+export const generateReportPdf = async (req, res) => {
+  try {
+    const {
+      transactions = [],
+      allTransactions = [],
+      aiInsight = '',
+      profile = null
+    } = req.body;
+
+    const company = await getCompanySettings();
+    
+    // Build HTML representation
+    const html = buildReportHtml({
+      transactions,
+      allTransactions,
+      aiInsight
+    }, company, profile);
+
+    // Convert HTML to PDF buffer (A4 portrait)
+    const pdfBuffer = await htmlToPdfBuffer(html, { format: 'A4', landscape: false });
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const filename = `Laporan_Keuangan_KroomBox_${todayStr}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(Buffer.from(pdfBuffer));
+  } catch (err) {
+    console.error('generateReportPdf error:', err);
+    return res.status(500).json({ status: 'error', message: 'Gagal membuat Laporan Keuangan PDF.' });
+  }
+};
+
+

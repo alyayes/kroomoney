@@ -2,9 +2,14 @@ import { pool } from '../config/db.js';
 
 class ReceiptModel {
   // Generate nomor kwitansi otomatis: KWT-YYYYMM-XXXX
-  static async generateNomor() {
-    const now = new Date();
-    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  static async generateNomor(customDate) {
+    let yyyymm;
+    if (customDate && typeof customDate === 'string') {
+      yyyymm = customDate.substring(0, 7).replace(/-/g, '');
+    } else {
+      const d = customDate instanceof Date ? customDate : new Date();
+      yyyymm = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
     const prefix = `KWT-${yyyymm}-`;
     const [rows] = await pool.query(
       `SELECT receipt_number FROM receipts WHERE receipt_number LIKE ? ORDER BY id DESC LIMIT 1`,
@@ -95,7 +100,7 @@ class ReceiptModel {
     tanggal_terbit, nominal_diterima,
     metode_pembayaran, diterima_oleh, keterangan, created_by
   }) {
-    const nomor_kwitansi = await ReceiptModel.generateNomor();
+    const nomor_kwitansi = await ReceiptModel.generateNomor(tanggal_terbit);
     
     // Resolve customer_id
     let customerId = null;

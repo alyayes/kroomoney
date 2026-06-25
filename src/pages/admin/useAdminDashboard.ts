@@ -80,18 +80,11 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
   const [treasurers, setTreasurers] = useState<any[]>(() => {
     const savedTreasurers = localStorage.getItem("kroombox_admin_treasurers");
     const parsed = savedTreasurers ? JSON.parse(savedTreasurers) : null;
-    return parsed && parsed.length > 0 ? parsed : [
-      { id: "TR-001", nama: "Fina Selia", email: "fina@kroombox.com", role: "Bendahara", status: "Active", startup: "Kroombox Corp", lastActive: "10 mins ago" },
-      { id: "TR-002", nama: "Dian Nugraha", email: "dian.n@gmail.com", role: "Bendahara", status: "Active", startup: "Kroombox Premium", lastActive: "1 hour ago" },
-      { id: "TR-003", nama: "Budi Santoso", email: "budi.st@domain.com", role: "Bendahara", status: "Inactive", startup: "Logistics Go", lastActive: "2 days ago" },
-      { id: "TR-004", nama: "Ayu Lestari", email: "ayu.lestari@kroombox.com", role: "Bendahara", status: "Active", startup: "Telkom Studio", lastActive: "Just now" }
-    ];
+    return parsed && parsed.length > 0 ? parsed : [];
   });
   const [customers, setCustomers] = useState<any[]>(() => {
     const savedCustomers = localStorage.getItem("kroombox_admin_customers");
-    return savedCustomers ? JSON.parse(savedCustomers) : [
-      { id_pelanggan: "CUST-001", nama_pelanggan: "Budi Dummy", no_whatsapp: "08123456789", paket_hosting: "Pro Hosting", nominal_tagihan: 250000, tanggal_jatuh_tempo: "2026-06-15" }
-    ];
+    return savedCustomers ? JSON.parse(savedCustomers) : [];
   });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -110,20 +103,10 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     whatsappToken: "whatsapp_mock_token_session_2026"
   });
 
-  // Master Data Legacy States (kept for compatibility)
-  const [categories, setCategories] = useState<any[]>([
-    { id: "cat-1", name: "Operasional", type: "Pengeluaran", description: "Biaya harian kantor & utilitas" },
-    { id: "cat-2", name: "Gaji & Staf", type: "Pengeluaran", description: "Gaji bulanan karyawan & bonus" },
-    { id: "cat-3", name: "Pemasaran", type: "Pengeluaran", description: "Biaya iklan & promosi startup" },
-    { id: "cat-4", name: "Paket Premium", type: "Pemasukan", description: "Hasil langganan pengguna premium" },
-    { id: "cat-5", name: "Kemitraan", type: "Pemasukan", description: "Pendapatan dari sponsor & mitra" }
-  ]);
-  const [paymentMethods, setPaymentMethods] = useState<string[]>(["Bank Transfer", "E-Wallet", "Cash", "Credit Card"]);
-  const [budgetPeriods, setBudgetPeriods] = useState<any[]>([
-    { id: "p-1", name: "Juni 2026", status: "Active", limit: 250000000 },
-    { id: "p-2", name: "Q2 2026", status: "Active", limit: 750000000 },
-    { id: "p-3", name: "Mei 2026", status: "Closed", limit: 200000000 }
-  ]);
+  // Master Data States (empty by default if no real data is fetched)
+  const [categories, setCategories] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
+  const [budgetPeriods, setBudgetPeriods] = useState<any[]>([]);
 
   // Sync / Load data from backend API
   const syncData = async () => {
@@ -243,24 +226,15 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     }
   };
 
-  const defaultTreasurers = [
-    { id: "TR-001", nama: "Fina Selia", email: "fina@kroombox.com", status: "Active", role: "Bendahara", startup: "Kroombox Corp", lastActive: "10 mins ago" },
-    { id: "TR-002", nama: "Dian Nugraha", email: "dian.n@gmail.com", status: "Active", role: "Bendahara", startup: "Kroombox Premium", lastActive: "1 hour ago" },
-    { id: "TR-003", nama: "Budi Santoso", email: "budi.st@domain.com", status: "Inactive", role: "Bendahara", startup: "Logistics Go", lastActive: "2 days ago" },
-    { id: "TR-004", nama: "Ayu Lestari", email: "ayu.lestari@kroombox.com", status: "Active", role: "Bendahara", startup: "Telkom Studio", lastActive: "Just now" }
-  ];
-
   const loadLocalData = () => {
     // Load local storage fallbacks — check for empty arrays to avoid showing blank table
     const savedTreasurers = localStorage.getItem("kroombox_admin_treasurers");
     const parsedTreasurers = savedTreasurers ? JSON.parse(savedTreasurers) : null;
-    setTreasurers(parsedTreasurers && parsedTreasurers.length > 0 ? parsedTreasurers : defaultTreasurers);
+    setTreasurers(parsedTreasurers && parsedTreasurers.length > 0 ? parsedTreasurers : []);
 
     const savedCustomers = localStorage.getItem("kroombox_admin_customers");
     const parsedCustomers = savedCustomers ? JSON.parse(savedCustomers) : null;
-    setCustomers(parsedCustomers && parsedCustomers.length > 0 ? parsedCustomers : [
-      { id_pelanggan: "CUST-001", nama_pelanggan: "Budi Dummy", no_whatsapp: "08123456789", paket_hosting: "Pro Hosting", nominal_tagihan: 250000, tanggal_jatuh_tempo: "2026-06-15" }
-    ]);
+    setCustomers(parsedCustomers && parsedCustomers.length > 0 ? parsedCustomers : []);
 
     const savedTrx = localStorage.getItem("kroombox_data");
     setTransactions(savedTrx ? JSON.parse(savedTrx) : []);
@@ -268,10 +242,7 @@ export function useAdminDashboard({ profile, token, onLogout, isOffline: initial
     const savedSettings = localStorage.getItem("kroombox_admin_settings");
     if (savedSettings) setAppSettings(JSON.parse(savedSettings));
 
-    setAuditLogs([
-      { id: "log-1", time: "2026-06-01 02:35", user: "Admin", action: "Updated App Settings", ip: "192.168.1.1", severity: "Info" },
-      { id: "log-2", time: "2026-06-01 02:12", user: "Fina Selia", action: "Approved Payment TRX-1001", ip: "114.122.34.8", severity: "Success" }
-    ]);
+    setAuditLogs([]);
   };
 
   useEffect(() => {
