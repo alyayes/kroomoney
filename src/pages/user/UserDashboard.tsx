@@ -1039,13 +1039,15 @@ export default function UserDashboard({
                                   String(today.getMonth() + 1).padStart(2, '0') +
                                   String(today.getDate()).padStart(2, '0');
                               })();
+                          const yyyymm = yyyymmdd.substring(0, 6);
                           const rawCode = selectedReceipt.trxId.split('-')[1] || selectedReceipt.id;
                           const code = rawCode.replace(/\D/g, "") || "1001";
-                          return `INV/${yyyymmdd}/MPL/${code}`;
+                          return `INV/${yyyymm}/${code}`;
                         } catch {
                           const rawCode = selectedReceipt.trxId?.split('-')[1] || selectedReceipt.id || "1001";
                           const code = String(rawCode).replace(/\D/g, "") || "1001";
-                          return `INV/MPL/${code}`;
+                          const yyyymm = new Date().getFullYear() + String(new Date().getMonth() + 1).padStart(2, '0');
+                          return `INV/${yyyymm}/${code}`;
                         }
                       })();
                       return (
@@ -1229,18 +1231,6 @@ export default function UserDashboard({
                                 </p>
                                 <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mt-1">
                                   <Globe className="w-3.5 h-3.5 text-[#1a3a6b]" /> kroombox.com
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[10px] text-slate-400 italic font-medium">
-                                  Dicetak pada: {new Date().toLocaleDateString('id-ID', {
-                                    day: 'numeric',
-                                    month: 'long',
-                                    year: 'numeric'
-                                  })} {new Date().toLocaleTimeString('id-ID', {
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })} WIB
                                 </p>
                               </div>
                             </div>

@@ -132,7 +132,7 @@ export default function IncomeList({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {t.statusPembayaran === "Pending" && (
+                      {t.statusPembayaran !== "Lunas" && (
                         <button
                           onClick={() => handleApprove(t.id)}
                           className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg border-none active:scale-95 transition-all cursor-pointer inline-flex items-center"

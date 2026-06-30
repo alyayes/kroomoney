@@ -617,13 +617,14 @@ export const generatePdfFromData = async (req, res) => {
       const parsedDiskon = Number(String(trx.diskon).replace(/\D/g, '')) || 0;
       
       const trxDateYmd = trx.tanggal.replace(/-/g, '');
+      const trxDateYm = trxDateYmd.substring(0, 6);
 
       const invoice = {
         tanggal_terbit: trx.tanggal,
         tanggal_jatuh_tempo: trx.tanggal,
         nama_pelanggan: trx.namaPembeli,
         no_whatsapp: trx.noTelepon,
-        nomor_invoice: `INV-${trxDateYmd}-MPL-${String(trx.trxId.split('-')[1] || trx.id).replace(/\D/g, "") || "1001"}`,
+        nomor_invoice: `INV/${trxDateYm}/${String(trx.trxId.split('-')[1] || trx.id).replace(/\D/g, "") || "1001"}`,
         subtotal: (trx.items && trx.items.length > 0) ? parsedJumlah : parsedJumlah * (trx.kuantitas || 1),
         diskon: parsedDiskon,
         total: (trx.items && trx.items.length > 0) ? parsedJumlah - parsedDiskon : (parsedJumlah * (trx.kuantitas || 1)) - parsedDiskon,
@@ -647,7 +648,7 @@ export const generatePdfFromData = async (req, res) => {
       }];
 
       html = buildInvoiceHtml(invoice, items, company, ttd);
-      filename = `${invoice.nomor_invoice}.pdf`;
+      filename = `${invoice.nomor_invoice.replace(/\//g, '-')}.pdf`;
     } else if (docType === 'Kwitansi') {
       const parsedJumlah = Number(String(trx.jumlah).replace(/\D/g, '')) || 0;
       const parsedDiskon = Number(String(trx.diskon).replace(/\D/g, '')) || 0;
@@ -664,7 +665,7 @@ export const generatePdfFromData = async (req, res) => {
       };
 
       const invoice = {
-        nomor_invoice: `INV-${trx.tanggal.replace(/-/g, '')}-MPL-${String(trx.trxId.split('-')[1] || trx.id).replace(/\D/g, "") || "1001"}`
+        nomor_invoice: `INV/${trx.tanggal.replace(/-/g, '').substring(0, 6)}/${String(trx.trxId.split('-')[1] || trx.id).replace(/\D/g, "") || "1001"}`
       };
 
       const signerName = profile?.nama || profile?.nama_lengkap || profile?.namaLengkap || company.signerName;

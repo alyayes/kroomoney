@@ -90,12 +90,18 @@ class TransactionModel {
     const r = rows[0];
     r.sertakan_tanda_tangan = r.sertakan_tanda_tangan ? 1 : 0;
 
-        namaPembeli: item.nama_pembeli,
-        noTelepon: item.no_telepon,
-        notes: item.notes
+    if (r.items && typeof r.items === 'string') {
+      try { 
+        r.items = JSON.parse(r.items); 
+      } catch(e) {}
+    }
+
+    if (Array.isArray(r.items)) {
+      r.items = r.items.map(item => ({
+        namaPembeli: item.nama_pembeli || item.namaPembeli || '',
+        noTelepon: item.no_telepon || item.noTelepon || '',
+        notes: item.notes || ''
       }));
-    } else if (r.items && typeof r.items === 'string') {
-      try { r.items = JSON.parse(r.items); } catch(e) {}
     }
 
     return r;

@@ -113,8 +113,6 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
   const noWa = invoice.no_whatsapp || invoice.no_wa_manual || '-';
   const catatan = invoice.catatan || '-';
   const invNumber = invoice.nomor_invoice;
-  
-  const printTime = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
 
   // Item rows
   const itemRowsHtml = items.map(item => `
@@ -499,12 +497,9 @@ export function buildInvoiceHtml(invoice, items, company, tandaTangan) {
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3a6b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
             kroombox.com
           </span>
-        </div>
-        <div class="update-time">
-          Dicetak pada: ${printTime}
+      </div>
     </div>
   </div>
-</div>
 </body>
 </html>`;
 }

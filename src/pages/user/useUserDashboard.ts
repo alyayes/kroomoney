@@ -85,11 +85,21 @@ export const parseDecimalInput = (formattedValue: string): number => {
 
 const formatDatePart = (dateStr: string): string => dateStr ? dateStr.split("T")[0] : "";
 
-const generateTrxId = () => `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
+const generateTrxId = (existingTransactions = []) => {
+  const ids = (existingTransactions || [])
+    .map(t => {
+      const match = String(t.trxId).match(/TRX-(\d+)/);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+    .filter(id => id > 0 && id < 100000);
+  const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+  const nextId = maxId > 0 ? maxId + 1 : 1;
+  return `TRX-${String(nextId).padStart(4, '0')}`;
+};
 const generateUserId = () => "USR-" + Math.random().toString(36).substring(2, 11).toUpperCase();
 
 const INITIAL_FORM_STATE: FormState = {
-  trxId: generateTrxId(),
+  trxId: "",
   tanggal: new Date().toISOString().split("T")[0],
   userId: "", // Starts blank to allow manual entry by default
   tipe: "Debit",
@@ -164,7 +174,10 @@ export function useUserDashboard({
     ];
   });
 
-  const [form, setForm] = useState<FormState>(INITIAL_FORM_STATE);
+  const [form, setForm] = useState<FormState>(() => ({
+    ...INITIAL_FORM_STATE,
+    trxId: generateTrxId(transactions)
+  }));
   const [customers, setCustomers] = useState<any[]>(() => {
     const saved = localStorage.getItem("kroombox_admin_customers");
     return saved ? JSON.parse(saved) : [];
@@ -193,6 +206,49 @@ export function useUserDashboard({
       tandaTangan: profile.tandaTangan || ""
     });
   }, [profile]);
+
+  // Migration: Convert old 6-digit random TRX IDs in local storage to sequential IDs
+  useEffect(() => {
+    const saved = localStorage.getItem("kroombox_data");
+    if (!saved) return;
+    try {
+      const localTrxs = JSON.parse(saved);
+      if (!Array.isArray(localTrxs)) return;
+      
+      const hasRandomIds = localTrxs.some(t => {
+        const match = String(t.trxId).match(/TRX-(\d+)/);
+        return match && parseInt(match[1], 10) >= 100000;
+      });
+
+      if (hasRandomIds) {
+        let seqCounter = 1;
+        const migrated = [...localTrxs].reverse().map(t => {
+          const match = String(t.trxId).match(/TRX-(\d+)/);
+          if (t.trxId === "TRX-DUMMY" || t.trxId === "TRX-1001" || (match && parseInt(match[1], 10) >= 100000)) {
+            const newId = `TRX-${String(seqCounter++).padStart(4, '0')}`;
+            return { ...t, trxId: newId };
+          } else if (match && parseInt(match[1], 10) < 100000) {
+            const currentSeq = parseInt(match[1], 10);
+            if (currentSeq >= seqCounter) {
+              seqCounter = currentSeq + 1;
+            }
+            return t;
+          }
+          return t;
+        }).reverse();
+
+        setTransactions(migrated);
+        localStorage.setItem("kroombox_data", JSON.stringify(migrated));
+        
+        setForm(prev => ({
+          ...prev,
+          trxId: generateTrxId(migrated)
+        }));
+      }
+    } catch (e) {
+      console.error("Migration error:", e);
+    }
+  }, []);
 
   const API_BASE = "http://127.0.0.1:5000/api";
 
@@ -259,6 +315,40 @@ export function useUserDashboard({
   const syncWithBackend = async () => {
     if (!token || token === "offline-token-session") return;
     try {
+      const saved = localStorage.getItem("kroombox_data");
+      if (saved) {
+        const localTrxs = JSON.parse(saved);
+        if (Array.isArray(localTrxs)) {
+          const toSync = localTrxs.filter(t => 
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(t.id))
+          );
+          for (const trx of toSync) {
+            try {
+              await apiRequest("/transactions", {
+                method: "POST",
+                body: JSON.stringify({
+                  tanggal: trx.tanggal,
+                  userId: trx.userId,
+                  jumlah: trx.jumlah,
+                  kuantitas: trx.kuantitas,
+                  diskon: trx.diskon,
+                  items: trx.items,
+                  statusPembayaran: trx.statusPembayaran,
+                  statusDokumen: trx.statusDokumen,
+                  sertakanTandaTangan: trx.sertakanTandaTangan,
+                  notes: trx.notes,
+                  namaPembeli: trx.namaPembeli,
+                  noTelepon: trx.noTelepon,
+                  tipe: trx.tipe === "Kredit" ? "Kredit" : "Debit"
+                })
+              });
+            } catch (err) {
+              console.error("Failed to sync transaction:", trx, err);
+            }
+          }
+        }
+      }
+
       const profileRes = await apiRequest("/profile");
       if (profileRes && profileRes.data) {
         // Preserve locally-stored tandaTangan & fotoProfil if backend doesn't have them
@@ -454,21 +544,23 @@ export function useUserDashboard({
           finalTrx = res.data;
         }
       }
-      setTransactions(prev => [finalTrx, ...prev]);
+      const updatedOnSuccess = [finalTrx, ...transactions];
+      setTransactions(updatedOnSuccess);
       setNotification({ message: "Transaksi berhasil ditambahkan!", type: "success" });
       setForm({
         ...INITIAL_FORM_STATE,
-        trxId: generateTrxId(),
+        trxId: generateTrxId(updatedOnSuccess),
         userId: "",
         tanggal: new Date().toISOString().split("T")[0]
       });
     } catch (err: any) {
       if (err.message === "offline") {
-        setTransactions(prev => [newTrx, ...prev]);
+        const updatedOffline = [newTrx, ...transactions];
+        setTransactions(updatedOffline);
         setNotification({ message: "Disimpan dalam sesi lokal (Offline).", type: "success" });
         setForm({
           ...INITIAL_FORM_STATE,
-          trxId: generateTrxId(),
+          trxId: generateTrxId(updatedOffline),
           userId: "",
           tanggal: new Date().toISOString().split("T")[0]
         });
@@ -609,7 +701,7 @@ export function useUserDashboard({
       setEditingTrxId(null);
       setForm({
         ...INITIAL_FORM_STATE,
-        trxId: generateTrxId(),
+        trxId: generateTrxId(transactions),
         userId: "",
         tanggal: new Date().toISOString().split("T")[0]
       });
@@ -1170,13 +1262,15 @@ export function useUserDashboard({
       if (docType === "Invoice") {
         try {
           const yyyymmdd = trx.tanggal ? trx.tanggal.substring(0, 10).replace(/-/g, '') : '';
+          const yyyymm = yyyymmdd ? yyyymmdd.substring(0, 6) : new Date().getFullYear() + String(new Date().getMonth() + 1).padStart(2, '0');
           const rawCode = trx.trxId.split('-')[1] || trx.id;
           const code = String(rawCode).replace(/\D/g, "") || "1001";
-          finalFileName = yyyymmdd ? `INV-${yyyymmdd}-MPL-${code}.pdf` : `INV-MPL-${code}.pdf`;
+          finalFileName = `INV-${yyyymm}-${code}.pdf`;
         } catch {
           const rawCode = trx.trxId?.split('-')[1] || trx.id || "1001";
           const code = String(rawCode).replace(/\D/g, "") || "1001";
-          finalFileName = `INV-MPL-${code}.pdf`;
+          const yyyymm = new Date().getFullYear() + String(new Date().getMonth() + 1).padStart(2, '0');
+          finalFileName = `INV-${yyyymm}-${code}.pdf`;
         }
       } else if (docType === "Kwitansi") {
         try {
